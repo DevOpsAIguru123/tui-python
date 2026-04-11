@@ -1,0 +1,11 @@
+# Build output
+daily-tui
+dist/
+bin/
+
+# Go
+*.test
+*.out
+
+# Project-specific
+.superpowers/
