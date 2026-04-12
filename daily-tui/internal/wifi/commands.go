@@ -2,8 +2,10 @@ package wifi
 
 import (
 	"fmt"
+	"net"
 	"os/exec"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -23,6 +25,10 @@ type ScanDoneMsg struct {
 type ConnectDoneMsg struct {
 	SSID string
 	Err  error
+}
+
+type InternetCheckMsg struct {
+	Reachable bool
 }
 
 // DetectInterfaceCmd detects the WiFi interface name (e.g. "en0").
@@ -110,6 +116,20 @@ func ConnectSavedCmd(iface, ssid string) tea.Cmd {
 			return ConnectDoneMsg{SSID: ssid, Err: fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))}
 		}
 		return ConnectDoneMsg{SSID: ssid}
+	}
+}
+
+// PingInternetCmd checks internet connectivity by attempting a TCP connection
+// to Google's public DNS (8.8.8.8:53). This works without root privileges
+// unlike ICMP ping, and reliably indicates internet reachability.
+func PingInternetCmd() tea.Cmd {
+	return func() tea.Msg {
+		conn, err := net.DialTimeout("tcp", "8.8.8.8:53", 3*time.Second)
+		if err != nil {
+			return InternetCheckMsg{Reachable: false}
+		}
+		conn.Close()
+		return InternetCheckMsg{Reachable: true}
 	}
 }
 
