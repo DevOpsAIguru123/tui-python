@@ -3,7 +3,7 @@ package wifi_test
 import (
 	"testing"
 
-	"daily-tui/internal/wifi"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/wifi"
 )
 
 var airportOutput = `                            SSID BSSID             RSSI CHANNEL HT CC SECURITY (auth/unicast/group)

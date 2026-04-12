@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"daily-tui/internal/todo"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/todo"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

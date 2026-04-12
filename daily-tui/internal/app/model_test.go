@@ -4,10 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"daily-tui/internal/app"
-	"daily-tui/internal/config"
-	"daily-tui/internal/todo"
-	"daily-tui/internal/wifi"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/app"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/todo"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/wifi"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

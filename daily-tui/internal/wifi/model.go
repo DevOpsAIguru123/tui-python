@@ -3,8 +3,8 @@ package wifi
 import (
 	"strings"
 
-	"daily-tui/internal/config"
-	"daily-tui/internal/theme"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/theme"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"

@@ -31,17 +31,47 @@ Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea), styl
 
 ## Install
 
+### go install (recommended)
+
+Install directly to your `$GOPATH/bin` (or `$GOBIN`) — runs from any directory:
+
+```bash
+go install github.com/DevOpsAIguru123/productivity-tools/daily-tui@latest
+```
+
+Make sure `$GOPATH/bin` is in your `PATH`:
+
+```bash
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
+
+### From source with make
+
+```bash
+git clone https://github.com/DevOpsAIguru123/productivity-tools.git
+cd productivity-tools/daily-tui
+make install          # builds and copies to /usr/local/bin
+```
+
+To install elsewhere:
+
+```bash
+make install PREFIX=$HOME/.local
+```
+
+To uninstall:
+
+```bash
+make uninstall
+```
+
+### From source (manual)
+
 ```bash
 git clone https://github.com/DevOpsAIguru123/productivity-tools.git
 cd productivity-tools/daily-tui
 go build -o daily-tui .
-./daily-tui
-```
-
-Or install directly to your PATH:
-
-```bash
-go install github.com/DevOpsAIguru123/productivity-tools/daily-tui@latest
+sudo cp daily-tui /usr/local/bin/
 ```
 
 ---
@@ -65,8 +95,10 @@ Any network listed here will **always** prompt for a fresh password when you pre
 
 ## Usage
 
-```
-./daily-tui
+```bash
+daily-tui            # launch the TUI
+daily-tui --version  # print version
+daily-tui --help     # show help
 ```
 
 ### WiFi tab
@@ -199,13 +231,16 @@ daily-tui/
 
 ```bash
 # Run tests
-go test ./...
+make test
 
 # Build
-go build -o daily-tui .
+make build          # output: bin/daily-tui
 
-# Run
-./daily-tui
+# Build + install to /usr/local/bin
+make install
+
+# Clean build artifacts
+make clean
 ```
 
 ---

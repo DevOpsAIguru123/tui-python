@@ -3,9 +3,9 @@ package app
 import (
 	"strings"
 
-	"daily-tui/internal/theme"
-	"daily-tui/internal/todo"
-	"daily-tui/internal/wifi"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/theme"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/todo"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/wifi"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
