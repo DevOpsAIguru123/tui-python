@@ -3,8 +3,8 @@ package wifi_test
 import (
 	"testing"
 
-	"daily-tui/internal/config"
-	"daily-tui/internal/wifi"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/wifi"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

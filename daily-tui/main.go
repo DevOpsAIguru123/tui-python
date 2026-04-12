@@ -5,15 +5,35 @@ import (
 	"os"
 	"path/filepath"
 
-	"daily-tui/internal/app"
-	"daily-tui/internal/config"
-	"daily-tui/internal/todo"
-	"daily-tui/internal/wifi"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/app"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/todo"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/wifi"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// version is set at build time via -ldflags.
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--version", "-v":
+			fmt.Println("daily-tui " + version)
+			return
+		case "--help", "-h":
+			fmt.Println("daily-tui — terminal dashboard for WiFi & tasks")
+			fmt.Println()
+			fmt.Println("Usage: daily-tui [flags]")
+			fmt.Println()
+			fmt.Println("Flags:")
+			fmt.Println("  -v, --version   Print version and exit")
+			fmt.Println("  -h, --help      Show this help message")
+			return
+		}
+	}
+
 	configDir := filepath.Join(os.Getenv("HOME"), ".config", "daily-tui")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "error creating config dir: %v\n", err)

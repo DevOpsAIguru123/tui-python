@@ -1,4 +1,4 @@
-module daily-tui
+module github.com/DevOpsAIguru123/productivity-tools/daily-tui
 
 go 1.26.1
 

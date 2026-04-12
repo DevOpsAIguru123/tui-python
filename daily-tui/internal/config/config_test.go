@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"daily-tui/internal/config"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
 )
 
 func TestLoadMissingFile(t *testing.T) {
