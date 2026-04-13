@@ -64,3 +64,93 @@ func TestWifiModelCursorNavigation(t *testing.T) {
 		t.Errorf("expected cursor at 1, got %d", wm.Cursor())
 	}
 }
+
+func TestConnectDoneTriggersPingAndSetsCheckingInternet(t *testing.T) {
+	m := wifi.New(makeCfg())
+	m.SetIface("en0")
+
+	// Simulate a successful connection
+	updated, cmd := m.Update(wifi.ConnectDoneMsg{SSID: "TestNet"})
+	wm := updated.(wifi.Model)
+	if wm.Connected() != "TestNet" {
+		t.Errorf("expected connected to TestNet, got %q", wm.Connected())
+	}
+	if !wm.CheckingInternet() {
+		t.Error("expected checkingInternet to be true after connect")
+	}
+	if cmd == nil {
+		t.Error("expected a command (PingInternetCmd) after successful connect")
+	}
+}
+
+func TestInternetCheckMsgUpdatesHasInternet(t *testing.T) {
+	m := wifi.New(makeCfg())
+	m.SetIface("en0")
+
+	// First connect to set checkingInternet
+	updated, _ := m.Update(wifi.ConnectDoneMsg{SSID: "TestNet"})
+	wm := updated.(wifi.Model)
+
+	// Simulate internet reachable
+	updated, _ = wm.Update(wifi.InternetCheckMsg{Reachable: true})
+	wm = updated.(wifi.Model)
+	if !wm.HasInternet() {
+		t.Error("expected hasInternet to be true")
+	}
+	if wm.CheckingInternet() {
+		t.Error("expected checkingInternet to be false after check completes")
+	}
+
+	// Simulate internet unreachable
+	updated, _ = wm.Update(wifi.InternetCheckMsg{Reachable: false})
+	wm = updated.(wifi.Model)
+	if wm.HasInternet() {
+		t.Error("expected hasInternet to be false")
+	}
+}
+
+func TestEmptyConnectDoneClearsConnected(t *testing.T) {
+	m := wifi.New(makeCfg())
+	m.SetIface("en0")
+
+	// First connect
+	updated, _ := m.Update(wifi.ConnectDoneMsg{SSID: "TestNet"})
+	wm := updated.(wifi.Model)
+	if wm.Connected() != "TestNet" {
+		t.Fatalf("expected connected to TestNet, got %q", wm.Connected())
+	}
+
+	// Simulate GetCurrentNetworkCmd returning empty (not connected)
+	updated, _ = wm.Update(wifi.ConnectDoneMsg{})
+	wm = updated.(wifi.Model)
+	if wm.Connected() != "" {
+		t.Errorf("expected connected to be empty, got %q", wm.Connected())
+	}
+	if wm.HasInternet() {
+		t.Error("expected hasInternet to be false when not connected")
+	}
+}
+
+func TestEnterOnConnectedNetworkOpensPasswordInput(t *testing.T) {
+	m := wifi.New(makeCfg())
+	m.SetNetworks([]wifi.Network{
+		{SSID: "HomeNet", RSSI: -40},
+		{SSID: "CoffeeShop", RSSI: -60},
+	})
+	m.SetIface("en0")
+
+	// Simulate being connected to HomeNet
+	updated, _ := m.Update(wifi.ConnectDoneMsg{SSID: "HomeNet"})
+	wm := updated.(wifi.Model)
+
+	// Simulate internet check completing
+	updated, _ = wm.Update(wifi.InternetCheckMsg{Reachable: true})
+	wm = updated.(wifi.Model)
+
+	// Press Enter on connected network (cursor=0, which is HomeNet)
+	updated, _ = wm.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	wm = updated.(wifi.Model)
+	if !wm.Inputting() {
+		t.Error("expected input mode when pressing enter on connected network")
+	}
+}

@@ -20,15 +20,17 @@ const (
 
 // Model is the Bubble Tea model for the WiFi tab.
 type Model struct {
-	cfg       *config.Config
-	networks  []Network
-	cursor    int
-	connected string
-	iface     string
-	state     wifiState
-	input     textinput.Model
-	status    string
-	err       string
+	cfg              *config.Config
+	networks         []Network
+	cursor           int
+	connected        string
+	iface            string
+	state            wifiState
+	input            textinput.Model
+	status           string
+	err              string
+	hasInternet      bool
+	checkingInternet bool
 }
 
 // New creates a WifiModel with the given config.
@@ -41,10 +43,12 @@ func New(cfg *config.Config) Model {
 }
 
 // Exported accessors for tests
-func (m Model) Cursor() int       { return m.cursor }
-func (m Model) Inputting() bool   { return m.state == stateInputting }
-func (m Model) Connecting() bool  { return m.state == stateConnecting }
-func (m Model) Connected() string { return m.connected }
+func (m Model) Cursor() int            { return m.cursor }
+func (m Model) Inputting() bool        { return m.state == stateInputting }
+func (m Model) Connecting() bool       { return m.state == stateConnecting }
+func (m Model) Connected() string      { return m.connected }
+func (m Model) HasInternet() bool      { return m.hasInternet }
+func (m Model) CheckingInternet() bool { return m.checkingInternet }
 
 // SetNetworks sets the network list (used in tests and from ScanDoneMsg).
 func (m *Model) SetNetworks(n []Network) { m.networks = n }
@@ -86,7 +90,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.connected = msg.SSID
 			m.status = "Connected"
 			m.err = ""
+			m.checkingInternet = true
+			return m, PingInternetCmd()
+		} else {
+			// Not connected (empty SSID from GetCurrentNetworkCmd)
+			m.connected = ""
+			m.hasInternet = false
+			m.checkingInternet = false
+			m.status = ""
 		}
+		return m, nil
+
+	case InternetCheckMsg:
+		m.checkingInternet = false
+		m.hasInternet = msg.Reachable
 		return m, nil
 
 	case tea.KeyMsg:
@@ -119,6 +136,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			ssid := m.networks[m.cursor].SSID
+			if ssid == m.connected {
+				// Already-connected network: prompt for password reset
+				m.state = stateInputting
+				m.input.SetValue("")
+				m.input.Focus()
+				return m, nil
+			}
 			if m.cfg.IsDailyReset(ssid) {
 				// Daily-reset networks always prompt for a fresh password
 				m.state = stateInputting
@@ -129,10 +153,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// All listed networks are already saved — connect directly
 			m.state = stateConnecting
 			m.status = "Connecting..."
+			m.hasInternet = false
+			m.checkingInternet = false
 			return m, ConnectSavedCmd(m.iface, ssid)
 		case tea.KeyRunes:
 			if string(msg.Runes) == "r" {
-				return m, ScanCmd()
+				return m, tea.Batch(ScanCmd(), GetCurrentNetworkCmd(m.iface))
 			}
 		}
 
@@ -150,7 +176,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input.Blur()
 			m.state = stateConnecting
 			m.status = "Connecting..."
-			if m.cfg.IsDailyReset(ssid) {
+			m.hasInternet = false
+			m.checkingInternet = false
+			if ssid == m.connected || m.cfg.IsDailyReset(ssid) {
 				return m, ForgetAndConnectCmd(m.iface, ssid, password)
 			}
 			return m, ConnectCmd(m.iface, ssid, password)
@@ -169,7 +197,14 @@ func (m Model) View() string {
 	var sb strings.Builder
 
 	if m.connected != "" {
-		sb.WriteString(theme.StatusOK.Render("● Connected: "+m.connected) + "\n")
+		status := "● Connected: " + m.connected
+		if m.checkingInternet {
+			sb.WriteString(theme.StatusOK.Render(status) + " " + theme.Dimmed.Render("(checking internet...)") + "\n")
+		} else if m.hasInternet {
+			sb.WriteString(theme.StatusOK.Render(status) + "\n")
+		} else {
+			sb.WriteString(theme.StatusOK.Render(status) + " " + theme.StatusErr.Render("(no internet)") + "\n")
+		}
 	} else {
 		sb.WriteString(theme.Dimmed.Render("○ Not connected") + "\n")
 	}
@@ -207,6 +242,6 @@ func (m Model) View() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(theme.HelpStyle.Render("↑↓ navigate • enter connect • r refresh • esc cancel"))
+	sb.WriteString(theme.HelpStyle.Render("↑↓ navigate • enter connect/reset pw • r refresh • esc cancel"))
 	return sb.String()
 }
