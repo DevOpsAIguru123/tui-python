@@ -49,7 +49,7 @@ func main() {
 	wifiModel := wifi.New(cfg)
 	todoStore := todo.NewStore(filepath.Join(configDir, "todos.json"))
 	todoModel := todo.New(todoStore)
-	root := app.New(wifiModel, todoModel)
+	root := app.New(wifiModel, todoModel, version)
 
 	p := tea.NewProgram(root, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {

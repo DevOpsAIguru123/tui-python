@@ -62,6 +62,95 @@ func TestDetectWiFiInterfaceNotFound(t *testing.T) {
 	}
 }
 
+var ipconfigRedacted = `<dictionary> {
+  BSSID : <redacted>
+  ConnectionID : 16
+  IPv4 : <array> {
+    0 : <dictionary> {
+      Addresses : <array> {
+        0 : 192.168.1.164
+      }
+    }
+  }
+  InterfaceType : WiFi
+  LinkStatusActive : TRUE
+  SSID : <redacted>
+  Security : WPA2_PSK
+}`
+
+var ipconfigRealSSID = `<dictionary> {
+  BSSID : aa:bb:cc:dd:ee:ff
+  InterfaceType : WiFi
+  LinkStatusActive : TRUE
+  SSID : Agora Public
+}`
+
+var ipconfigNotConnected = `<dictionary> {
+  InterfaceType : WiFi
+  LinkStatusActive : FALSE
+}`
+
+func TestParseIpconfigSummaryRedacted(t *testing.T) {
+	connected, ssid := wifi.ParseIpconfigSummary(ipconfigRedacted)
+	if !connected {
+		t.Error("expected connected=true when LinkStatusActive is TRUE")
+	}
+	if ssid != "Wi-Fi" {
+		t.Errorf("expected ssid='Wi-Fi' for redacted SSID, got %q", ssid)
+	}
+}
+
+func TestParseIpconfigSummaryRealSSID(t *testing.T) {
+	connected, ssid := wifi.ParseIpconfigSummary(ipconfigRealSSID)
+	if !connected {
+		t.Error("expected connected=true")
+	}
+	if ssid != "Agora Public" {
+		t.Errorf("expected ssid='Agora Public', got %q", ssid)
+	}
+}
+
+func TestParseIpconfigSummaryNotConnected(t *testing.T) {
+	connected, ssid := wifi.ParseIpconfigSummary(ipconfigNotConnected)
+	if connected {
+		t.Error("expected connected=false when LinkStatusActive is FALSE")
+	}
+	if ssid != "" {
+		t.Errorf("expected empty ssid, got %q", ssid)
+	}
+}
+
+func TestParseRouterFromIpconfig(t *testing.T) {
+	got := wifi.ParseRouterFromIpconfig(ipconfigRedacted)
+	// ipconfigRedacted test fixture doesn't have a Router line — should return ""
+	if got != "" {
+		t.Errorf("expected empty router from test fixture, got %q", got)
+	}
+
+	withRouter := ipconfigRedacted + "\n  Router : 10.0.0.1\n"
+	got = wifi.ParseRouterFromIpconfig(withRouter)
+	if got != "10.0.0.1" {
+		t.Errorf("expected '10.0.0.1', got %q", got)
+	}
+}
+
+func TestParseARPMAC(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"? (10.0.0.1) at 1c:93:7c:c3:8f:8e on en0 ifscope [ethernet]\n", "1c:93:7c:c3:8f:8e"},
+		{"? (192.168.1.1) at (incomplete)  on en0\n", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := wifi.ParseARPMAC(tt.input)
+		if got != tt.want {
+			t.Errorf("ParseARPMAC(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestSignalBars(t *testing.T) {
 	tests := []struct {
 		rssi int

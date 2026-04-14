@@ -91,7 +91,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "Connected"
 			m.err = ""
 			m.checkingInternet = true
-			return m, PingInternetCmd()
+			// Cache the gateway MAC → SSID mapping so future startups can
+			// resolve the name even when macOS redacts the SSID.
+			return m, tea.Batch(PingInternetCmd(), CacheNetworkCmd(m.iface, msg.SSID))
 		} else {
 			// Not connected (empty SSID from GetCurrentNetworkCmd)
 			m.connected = ""
@@ -104,6 +106,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case InternetCheckMsg:
 		m.checkingInternet = false
 		m.hasInternet = msg.Reachable
+		if !msg.Reachable && m.connected != "" {
+			return m, m.promptForNoInternet()
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -192,6 +197,41 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// promptForNoInternet is called when connected but no internet is detected.
+// It finds the right network to prompt a password reset for:
+//   - Real SSID known → find it in the list and prompt directly.
+//   - SSID was redacted ("Wi-Fi") → fall back to the first [daily] network,
+//     since daily-reset networks are exactly the scenario where
+//     "connected but no internet" means the password changed.
+func (m *Model) promptForNoInternet() tea.Cmd {
+	target := m.connected
+
+	if target == "Wi-Fi" {
+		for _, n := range m.networks {
+			if m.cfg.IsDailyReset(n.SSID) {
+				target = n.SSID
+				break
+			}
+		}
+	}
+
+	if target == "" || target == "Wi-Fi" {
+		return nil
+	}
+
+	for i, n := range m.networks {
+		if n.SSID == target {
+			m.connected = target
+			m.cursor = i
+			m.state = stateInputting
+			m.input.SetValue("")
+			m.input.Focus()
+			return nil
+		}
+	}
+	return nil
+}
+
 // View renders the WiFi tab content.
 func (m Model) View() string {
 	var sb strings.Builder
@@ -233,7 +273,11 @@ func (m Model) View() string {
 
 	if m.state == stateInputting && len(m.networks) > 0 {
 		ssid := m.networks[m.cursor].SSID
-		sb.WriteString("\n" + theme.Dimmed.Render("Password for "+ssid+":") + "\n")
+		label := "Password for " + ssid + ":"
+		if !m.hasInternet && m.connected != "" {
+			label = "No internet — enter new password for " + ssid + ":"
+		}
+		sb.WriteString("\n" + theme.Dimmed.Render(label) + "\n")
 		sb.WriteString(m.input.View() + "\n")
 	}
 

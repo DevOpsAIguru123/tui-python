@@ -24,11 +24,12 @@ type Model struct {
 	todo      todo.Model
 	width     int
 	height    int
+	version   string
 }
 
 // New creates the root AppModel.
-func New(wm wifi.Model, tm todo.Model) Model {
-	return Model{wifi: wm, todo: tm}
+func New(wm wifi.Model, tm todo.Model, version string) Model {
+	return Model{wifi: wm, todo: tm, version: version}
 }
 
 // ActiveTab returns the index of the currently active tab.
@@ -107,6 +108,9 @@ func (m Model) View() string {
 
 	sb.WriteString("\n\n")
 	sb.WriteString(theme.HelpStyle.Render("tab/1/2 switch • q quit"))
+	if m.version != "" {
+		sb.WriteString("  " + theme.Dimmed.Render("v"+m.version))
+	}
 	return sb.String()
 }
 
