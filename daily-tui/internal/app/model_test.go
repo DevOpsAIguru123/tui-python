@@ -17,7 +17,7 @@ func newApp(t *testing.T) app.Model {
 	cfg := &config.Config{}
 	wm := wifi.New(cfg)
 	tm := todo.New(todo.NewStore(filepath.Join(t.TempDir(), "todos.json")))
-	return app.New(wm, tm)
+	return app.New(wm, tm, "test")
 }
 
 func TestAppModelDefaultTab(t *testing.T) {

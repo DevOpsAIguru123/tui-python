@@ -131,6 +131,78 @@ func TestEmptyConnectDoneClearsConnected(t *testing.T) {
 	}
 }
 
+// --- View output tests (headless rendering) ---
+
+func TestViewShowsNotConnectedByDefault(t *testing.T) {
+	m := wifi.New(makeCfg())
+	view := m.View()
+	if !contains(view, "Not connected") {
+		t.Errorf("expected 'Not connected' in view, got:\n%s", view)
+	}
+}
+
+func TestViewShowsConnectedWithSSID(t *testing.T) {
+	m := wifi.New(makeCfg())
+	m.SetIface("en0")
+	updated, _ := m.Update(wifi.ConnectDoneMsg{SSID: "mybabytux"})
+	wm := updated.(wifi.Model)
+	view := wm.View()
+	if !contains(view, "Connected") {
+		t.Errorf("expected 'Connected' in view, got:\n%s", view)
+	}
+	if !contains(view, "mybabytux") {
+		t.Errorf("expected SSID 'mybabytux' in view, got:\n%s", view)
+	}
+}
+
+func TestViewShowsNoInternetLabel(t *testing.T) {
+	m := wifi.New(makeCfg())
+	m.SetIface("en0")
+	updated, _ := m.Update(wifi.ConnectDoneMsg{SSID: "mybabytux"})
+	wm := updated.(wifi.Model)
+	updated, _ = wm.Update(wifi.InternetCheckMsg{Reachable: false})
+	wm = updated.(wifi.Model)
+	view := wm.View()
+	if !contains(view, "no internet") {
+		t.Errorf("expected 'no internet' in view, got:\n%s", view)
+	}
+}
+
+func TestNoInternetAutoPromptsForDailyNetwork(t *testing.T) {
+	m := wifi.New(makeCfg("Agora Public"))
+	m.SetNetworks([]wifi.Network{{SSID: "Agora Public", RSSI: -45}})
+	m.SetIface("en0")
+
+	// Simulate connected with redacted SSID
+	updated, _ := m.Update(wifi.ConnectDoneMsg{SSID: "Wi-Fi"})
+	wm := updated.(wifi.Model)
+
+	// No internet → should auto-prompt for Agora Public ([daily])
+	updated, _ = wm.Update(wifi.InternetCheckMsg{Reachable: false})
+	wm = updated.(wifi.Model)
+	if !wm.Inputting() {
+		t.Error("expected auto-prompt (inputting) when connected+no internet with daily network")
+	}
+	view := wm.View()
+	if !contains(view, "No internet") {
+		t.Errorf("expected 'No internet' prompt in view, got:\n%s", view)
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr ||
+		len(s) > 0 && containsStr(s, substr))
+}
+
+func containsStr(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestEnterOnConnectedNetworkOpensPasswordInput(t *testing.T) {
 	m := wifi.New(makeCfg())
 	m.SetNetworks([]wifi.Network{

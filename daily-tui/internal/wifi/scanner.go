@@ -99,6 +99,40 @@ func BarString(bars int) string {
 	return blocks[bars]
 }
 
+// ParseIpconfigSummary parses `ipconfig getsummary <iface>` output.
+// Returns (connected bool, ssid string). On macOS 13+, the SSID may be the
+// literal string "<redacted>" when Location Services are not granted to the
+// terminal; in that case ssid is returned as "Wi-Fi" so the UI can still
+// show a connected state rather than "Not connected".
+func ParseIpconfigSummary(output string) (bool, string) {
+	if !strings.Contains(output, "LinkStatusActive : TRUE") {
+		return false, ""
+	}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "SSID : ") {
+			ssid := strings.TrimSpace(strings.TrimPrefix(line, "SSID : "))
+			if ssid == "<redacted>" || ssid == "" {
+				return true, "Wi-Fi"
+			}
+			return true, ssid
+		}
+	}
+	return true, "Wi-Fi"
+}
+
+// ParseRouterFromIpconfig extracts the router (gateway) IP from `ipconfig getsummary` output.
+// Returns "" if not found.
+func ParseRouterFromIpconfig(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Router : ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "Router : "))
+		}
+	}
+	return ""
+}
+
 // ParsePreferredNetworks parses `networksetup -listpreferredwirelessnetworks` output.
 // macOS 15+ redacts SSIDs in airport/system_profiler, but this command returns real names.
 // The first line is a header ("Preferred networks on <iface>:") and is skipped.
