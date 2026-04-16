@@ -137,3 +137,33 @@ func TestTodoModelEditOnEmptyList(t *testing.T) {
 		t.Error("should not enter edit mode on empty list")
 	}
 }
+
+func TestTodoModelSectionedCursor(t *testing.T) {
+	s := todo.NewStore(filepath.Join(t.TempDir(), "todos.json"))
+	s.Add("Pending 1")
+	s.Add("Pending 2")
+	task3 := s.Add("Will complete")
+	s.Toggle(task3.ID) // mark done
+	m := todo.New(s)
+
+	// Cursor starts at 0 — first pending task
+	if m.Cursor() != 0 {
+		t.Fatalf("expected cursor at 0, got %d", m.Cursor())
+	}
+
+	// Move down twice — should reach the completed task (index 2)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(todo.Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(todo.Model)
+	if m.Cursor() != 2 {
+		t.Fatalf("expected cursor at 2, got %d", m.Cursor())
+	}
+
+	// Can't go past end
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(todo.Model)
+	if m.Cursor() != 2 {
+		t.Fatalf("expected cursor clamped at 2, got %d", m.Cursor())
+	}
+}
