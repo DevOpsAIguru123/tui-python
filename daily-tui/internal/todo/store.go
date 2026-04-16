@@ -10,10 +10,11 @@ import (
 
 // Task represents a single todo item.
 type Task struct {
-	ID        string    `json:"id"`
-	Text      string    `json:"text"`
-	Done      bool      `json:"done"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string     `json:"id"`
+	Text      string     `json:"text"`
+	Done      bool       `json:"done"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
 // Store manages todo persistence to a JSON file.
@@ -71,6 +72,19 @@ func (s *Store) Toggle(id string) {
 	for i := range s.tasks {
 		if s.tasks[i].ID == id {
 			s.tasks[i].Done = !s.tasks[i].Done
+			s.save()
+			return
+		}
+	}
+}
+
+// Update replaces the text of the task with the given ID.
+func (s *Store) Update(id, text string) {
+	for i := range s.tasks {
+		if s.tasks[i].ID == id {
+			s.tasks[i].Text = text
+			now := time.Now()
+			s.tasks[i].UpdatedAt = &now
 			s.save()
 			return
 		}
