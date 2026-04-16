@@ -11,11 +11,13 @@ import (
 
 // Model is the Bubble Tea model for the Todo tab.
 type Model struct {
-	store  *Store
-	tasks  []Task
-	cursor int
-	adding bool
-	input  textinput.Model
+	store      *Store
+	tasks      []Task
+	cursor     int
+	adding     bool
+	editing    bool
+	editTaskID string
+	input      textinput.Model
 }
 
 // New creates a TodoModel backed by the given store.
@@ -27,9 +29,11 @@ func New(s *Store) Model {
 }
 
 // Exported accessors for tests
-func (m Model) Adding() bool  { return m.adding }
-func (m Model) Tasks() []Task { return m.tasks }
-func (m Model) Cursor() int   { return m.cursor }
+func (m Model) Adding() bool    { return m.adding }
+func (m Model) Editing() bool   { return m.editing }
+func (m Model) Inputting() bool { return m.adding || m.editing }
+func (m Model) Tasks() []Task   { return m.tasks }
+func (m Model) Cursor() int     { return m.cursor }
 
 // Init is a no-op.
 func (m Model) Init() tea.Cmd { return nil }
@@ -40,7 +44,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
-	if m.adding {
+	if m.adding || m.editing {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd
@@ -49,20 +53,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.adding {
+	if m.adding || m.editing {
 		switch msg.Type {
 		case tea.KeyEsc:
 			m.adding = false
+			m.editing = false
+			m.editTaskID = ""
 			m.input.Blur()
 			m.input.SetValue("")
 		case tea.KeyEnter:
 			text := strings.TrimSpace(m.input.Value())
 			if text != "" {
-				m.store.Add(text)
-				m.tasks = m.store.All()
-				m.cursor = len(m.tasks) - 1
+				if m.adding {
+					m.store.Add(text)
+					m.tasks = m.store.All()
+					m.cursor = len(m.tasks) - 1
+				} else if m.editing {
+					m.store.Update(m.editTaskID, text)
+					m.tasks = m.store.All()
+				}
 			}
 			m.adding = false
+			m.editing = false
+			m.editTaskID = ""
 			m.input.Blur()
 			m.input.SetValue("")
 		default:
@@ -91,7 +104,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch string(msg.Runes) {
 		case "a":
 			m.adding = true
+			m.input.Placeholder = "Add a task..."
 			m.input.Focus()
+		case "e":
+			if len(m.tasks) > 0 {
+				m.editing = true
+				m.editTaskID = m.tasks[m.cursor].ID
+				m.input.Placeholder = "Edit task..."
+				m.input.SetValue(m.tasks[m.cursor].Text)
+				m.input.Focus()
+			}
 		case "d":
 			if len(m.tasks) > 0 {
 				m.store.Delete(m.tasks[m.cursor].ID)
