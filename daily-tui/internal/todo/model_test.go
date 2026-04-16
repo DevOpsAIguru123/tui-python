@@ -55,3 +55,115 @@ func TestTodoModelToggleTask(t *testing.T) {
 		t.Error("expected task done after space")
 	}
 }
+
+func TestTodoModelEditMode(t *testing.T) {
+	s := todo.NewStore(filepath.Join(t.TempDir(), "todos.json"))
+	s.Add("Edit me")
+	m := todo.New(s)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m = updated.(todo.Model)
+	if !m.Editing() {
+		t.Fatal("expected editing mode after pressing 'e'")
+	}
+}
+
+func TestTodoModelEditSave(t *testing.T) {
+	s := todo.NewStore(filepath.Join(t.TempDir(), "todos.json"))
+	s.Add("Original")
+	m := todo.New(s)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m = updated.(todo.Model)
+
+	for _, r := range "Updated" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = updated.(todo.Model)
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(todo.Model)
+	if m.Editing() {
+		t.Error("expected editing mode to end after enter")
+	}
+	if m.Tasks()[0].Text == "Original" {
+		t.Error("expected task text to be updated")
+	}
+}
+
+func TestTodoModelEditCancel(t *testing.T) {
+	s := todo.NewStore(filepath.Join(t.TempDir(), "todos.json"))
+	s.Add("Do not change")
+	m := todo.New(s)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m = updated.(todo.Model)
+
+	for _, r := range "CHANGED" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = updated.(todo.Model)
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(todo.Model)
+	if m.Editing() {
+		t.Error("expected editing mode to end after esc")
+	}
+	if m.Tasks()[0].Text != "Do not change" {
+		t.Errorf("expected text unchanged, got %q", m.Tasks()[0].Text)
+	}
+}
+
+func TestTodoModelEditEmptyNoOp(t *testing.T) {
+	s := todo.NewStore(filepath.Join(t.TempDir(), "todos.json"))
+	s.Add("Keep me")
+	m := todo.New(s)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m = updated.(todo.Model)
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(todo.Model)
+	if m.Tasks()[0].Text != "Keep me" {
+		t.Errorf("expected text unchanged when entering same text, got %q", m.Tasks()[0].Text)
+	}
+}
+
+func TestTodoModelEditOnEmptyList(t *testing.T) {
+	m := newModel(t)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m = updated.(todo.Model)
+	if m.Editing() {
+		t.Error("should not enter edit mode on empty list")
+	}
+}
+
+func TestTodoModelSectionedCursor(t *testing.T) {
+	s := todo.NewStore(filepath.Join(t.TempDir(), "todos.json"))
+	s.Add("Pending 1")
+	s.Add("Pending 2")
+	task3 := s.Add("Will complete")
+	s.Toggle(task3.ID) // mark done
+	m := todo.New(s)
+
+	// Cursor starts at 0 — first pending task
+	if m.Cursor() != 0 {
+		t.Fatalf("expected cursor at 0, got %d", m.Cursor())
+	}
+
+	// Move down twice — should reach the completed task (index 2)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(todo.Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(todo.Model)
+	if m.Cursor() != 2 {
+		t.Fatalf("expected cursor at 2, got %d", m.Cursor())
+	}
+
+	// Can't go past end
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(todo.Model)
+	if m.Cursor() != 2 {
+		t.Fatalf("expected cursor clamped at 2, got %d", m.Cursor())
+	}
+}

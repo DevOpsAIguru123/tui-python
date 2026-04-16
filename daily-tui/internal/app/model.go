@@ -57,7 +57,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Only intercept navigation keys when the active child is not in an input mode.
 		// If the user is typing a password or a todo, all keys belong to the child.
 		childInputting := (m.activeTab == tabWifi && m.wifi.Inputting()) ||
-			(m.activeTab == tabTodo && m.todo.Adding())
+			(m.activeTab == tabTodo && m.todo.Inputting())
 		if !childInputting {
 			if msg.Type == tea.KeyRunes && string(msg.Runes) == "q" {
 				return m, tea.Quit

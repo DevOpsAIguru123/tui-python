@@ -57,3 +57,48 @@ func TestStorePersistence(t *testing.T) {
 		t.Errorf("expected 'Persistent task', got %q", tasks[0].Text)
 	}
 }
+
+func TestStoreUpdateTask(t *testing.T) {
+	s := todo.NewStore(filepath.Join(t.TempDir(), "todos.json"))
+	task := s.Add("Original text")
+	s.Update(task.ID, "Updated text")
+	tasks := s.All()
+	if tasks[0].Text != "Updated text" {
+		t.Errorf("expected 'Updated text', got %q", tasks[0].Text)
+	}
+	if tasks[0].UpdatedAt == nil {
+		t.Error("expected UpdatedAt to be set after update")
+	}
+}
+
+func TestStoreUpdateNonExistent(t *testing.T) {
+	s := todo.NewStore(filepath.Join(t.TempDir(), "todos.json"))
+	s.Add("Keep me")
+	s.Update("nonexistent-id", "Should not crash")
+	tasks := s.All()
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+	if tasks[0].Text != "Keep me" {
+		t.Errorf("expected 'Keep me', got %q", tasks[0].Text)
+	}
+}
+
+func TestStoreUpdatePersistence(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "todos.json")
+	s1 := todo.NewStore(path)
+	task := s1.Add("Before update")
+	s1.Update(task.ID, "After update")
+
+	s2 := todo.NewStore(path)
+	tasks := s2.All()
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task after reload, got %d", len(tasks))
+	}
+	if tasks[0].Text != "After update" {
+		t.Errorf("expected 'After update', got %q", tasks[0].Text)
+	}
+	if tasks[0].UpdatedAt == nil {
+		t.Error("expected UpdatedAt to survive reload")
+	}
+}
