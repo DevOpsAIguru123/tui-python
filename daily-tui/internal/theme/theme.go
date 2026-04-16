@@ -48,4 +48,14 @@ var (
 
 	HelpStyle = lipgloss.NewStyle().
 			Foreground(Overlay)
+
+	ProgressFilled = lipgloss.NewStyle().
+			Foreground(Green)
+
+	ProgressEmpty = lipgloss.NewStyle().
+			Foreground(Overlay)
+
+	SectionHeader = lipgloss.NewStyle().
+			Foreground(Text).
+			Bold(true)
 )
