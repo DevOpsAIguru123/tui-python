@@ -34,10 +34,12 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: go
+          # Module lives under daily-tui/, so autobuild (which looks at repo
+          # root) won't find it — trace an explicit build instead.
+          build-mode: manual
           # security-and-quality covers more than the default security-only pack
           queries: security-and-quality
 
-      # Manual build — the Go module lives under daily-tui/
       - name: Build Go module
         working-directory: daily-tui
         run: go build ./...
