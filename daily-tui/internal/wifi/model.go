@@ -13,7 +13,7 @@ import (
 type wifiState int
 
 const (
-	stateBrowsing  wifiState = iota
+	stateBrowsing wifiState = iota
 	stateInputting
 	stateConnecting
 )
