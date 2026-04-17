@@ -7,6 +7,7 @@ import (
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/app"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/calendar"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/portfolio"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/todo"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/wifi"
 
@@ -19,7 +20,8 @@ func newApp(t *testing.T) app.Model {
 	wm := wifi.New(cfg)
 	tm := todo.New(todo.NewStore(filepath.Join(t.TempDir(), "todos.json")))
 	cm := calendar.New()
-	return app.New(wm, tm, cm, "test")
+	pm := portfolio.New(portfolio.NewStore(filepath.Join(t.TempDir(), "portfolio.json")))
+	return app.New(wm, tm, cm, pm, "test")
 }
 
 func TestAppModelDefaultTab(t *testing.T) {
@@ -31,20 +33,12 @@ func TestAppModelDefaultTab(t *testing.T) {
 
 func TestAppModelTabSwitch(t *testing.T) {
 	m := newApp(t)
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	am := updated.(app.Model)
-	if am.ActiveTab() != 1 {
-		t.Errorf("expected tab 1 after Tab, got %d", am.ActiveTab())
-	}
-	updated, _ = am.Update(tea.KeyMsg{Type: tea.KeyTab})
-	am = updated.(app.Model)
-	if am.ActiveTab() != 2 {
-		t.Errorf("expected tab 2 after second Tab, got %d", am.ActiveTab())
-	}
-	updated, _ = am.Update(tea.KeyMsg{Type: tea.KeyTab})
-	am = updated.(app.Model)
-	if am.ActiveTab() != 0 {
-		t.Errorf("expected tab 0 after third Tab (wrap), got %d", am.ActiveTab())
+	for i, want := range []int{1, 2, 3, 0} {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+		m = updated.(app.Model)
+		if m.ActiveTab() != want {
+			t.Errorf("after Tab #%d: got %d, want %d", i+1, m.ActiveTab(), want)
+		}
 	}
 }
 
@@ -67,14 +61,28 @@ func TestAppModelNumberKeySwitch(t *testing.T) {
 	if am.ActiveTab() != 2 {
 		t.Errorf("expected calendar tab to consume '1'; tab changed to %d", am.ActiveTab())
 	}
+	// Tab from Calendar goes to Portfolio (tab 3), not WiFi.
+	updated, _ = am.Update(tea.KeyMsg{Type: tea.KeyTab})
+	am = updated.(app.Model)
+	if am.ActiveTab() != 3 {
+		t.Errorf("expected Portfolio tab (3) after Tab from Calendar, got %d", am.ActiveTab())
+	}
+	// Portfolio also claims '1' / '2' for section switching.
+	updated, _ = am.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	am = updated.(app.Model)
+	if am.ActiveTab() != 3 {
+		t.Errorf("expected Portfolio tab to consume '1'; tab changed to %d", am.ActiveTab())
+	}
+	// Wrap back to WiFi with one more Tab.
 	updated, _ = am.Update(tea.KeyMsg{Type: tea.KeyTab})
 	am = updated.(app.Model)
 	if am.ActiveTab() != 0 {
-		t.Errorf("expected wrap to tab 0 after Tab from Calendar, got %d", am.ActiveTab())
+		t.Errorf("expected wrap to tab 0 after Tab from Portfolio, got %d", am.ActiveTab())
 	}
-	updated, _ = am.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	// From WiFi, '4' switches to Portfolio.
+	updated, _ = am.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
 	am = updated.(app.Model)
-	if am.ActiveTab() != 0 {
-		t.Errorf("expected tab 0 after '1' from WiFi tab, got %d", am.ActiveTab())
+	if am.ActiveTab() != 3 {
+		t.Errorf("expected tab 3 after '4' from WiFi, got %d", am.ActiveTab())
 	}
 }

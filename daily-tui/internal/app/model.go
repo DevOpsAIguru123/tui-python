@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/calendar"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/portfolio"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/theme"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/todo"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/wifi"
@@ -12,12 +13,13 @@ import (
 )
 
 const (
-	tabWifi     = 0
-	tabTodo     = 1
-	tabCalendar = 2
+	tabWifi      = 0
+	tabTodo      = 1
+	tabCalendar  = 2
+	tabPortfolio = 3
 )
 
-var tabNames = []string{"WiFi", "Todo", "Calendar"}
+var tabNames = []string{"WiFi", "Todo", "Calendar", "Portfolio"}
 
 // Model is the root Bubble Tea model.
 type Model struct {
@@ -25,14 +27,15 @@ type Model struct {
 	wifi      wifi.Model
 	todo      todo.Model
 	calendar  calendar.Model
+	portfolio portfolio.Model
 	width     int
 	height    int
 	version   string
 }
 
 // New creates the root AppModel.
-func New(wm wifi.Model, tm todo.Model, cm calendar.Model, version string) Model {
-	return Model{wifi: wm, todo: tm, calendar: cm, version: version}
+func New(wm wifi.Model, tm todo.Model, cm calendar.Model, pm portfolio.Model, version string) Model {
+	return Model{wifi: wm, todo: tm, calendar: cm, portfolio: pm, version: version}
 }
 
 // ActiveTab returns the index of the currently active tab.
@@ -40,7 +43,7 @@ func (m Model) ActiveTab() int { return m.activeTab }
 
 // Init starts all child models.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.wifi.Init(), m.todo.Init(), m.calendar.Init())
+	return tea.Batch(m.wifi.Init(), m.todo.Init(), m.calendar.Init(), m.portfolio.Init())
 }
 
 // Update handles messages: tab-switch keys are consumed here; all others
@@ -61,7 +64,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If the user is typing a password or a todo, all keys belong to the child.
 		childInputting := (m.activeTab == tabWifi && m.wifi.Inputting()) ||
 			(m.activeTab == tabTodo && m.todo.Inputting()) ||
-			(m.activeTab == tabCalendar && m.calendar.Inputting())
+			(m.activeTab == tabCalendar && m.calendar.Inputting()) ||
+			(m.activeTab == tabPortfolio && m.portfolio.Inputting())
 		if !childInputting {
 			if msg.Type == tea.KeyRunes && string(msg.Runes) == "q" {
 				return m, tea.Quit
@@ -71,10 +75,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if msg.Type == tea.KeyRunes {
-				// When the Calendar tab is active, 1 / 2 / 3 switch its
-				// time-range filters instead of tabs. The user can still
-				// reach other tabs via Tab.
-				if m.activeTab != tabCalendar {
+				// Calendar and Portfolio claim the number keys for their own
+				// in-tab navigation (Calendar: Today/Week/Month, Portfolio:
+				// Holdings/Watchlist). Only treat digits as tab-switches when
+				// the active tab doesn't need them.
+				if m.activeTab != tabCalendar && m.activeTab != tabPortfolio {
 					switch string(msg.Runes) {
 					case "1":
 						m.activeTab = tabWifi
@@ -84,6 +89,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					case "3":
 						m.activeTab = tabCalendar
+						return m, nil
+					case "4":
+						m.activeTab = tabPortfolio
 						return m, nil
 					}
 				}
@@ -114,6 +122,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		updated, cmd := m.calendar.Update(msg)
 		m.calendar = updated.(calendar.Model)
 		return m, cmd
+	case tabPortfolio:
+		updated, cmd := m.portfolio.Update(msg)
+		m.portfolio = updated.(portfolio.Model)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -131,10 +143,12 @@ func (m Model) View() string {
 		sb.WriteString(m.todo.View())
 	case tabCalendar:
 		sb.WriteString(m.calendar.View())
+	case tabPortfolio:
+		sb.WriteString(m.portfolio.View())
 	}
 
 	sb.WriteString("\n\n")
-	sb.WriteString(theme.HelpStyle.Render("tab/1/2/3 switch • q quit"))
+	sb.WriteString(theme.HelpStyle.Render("tab/1/2/3/4 switch • q quit"))
 	if m.version != "" {
 		sb.WriteString("  " + theme.Dimmed.Render("v"+m.version))
 	}
