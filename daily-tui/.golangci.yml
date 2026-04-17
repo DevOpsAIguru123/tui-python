@@ -1,0 +1,16 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  # errcheck is intentionally disabled: the store layer deliberately ignores
+  # errors from os.WriteFile/json.Unmarshal (e.g. `_ = os.WriteFile(...)`),
+  # where there's no meaningful recovery path for a TUI app.
+  disable:
+    - errcheck
+
+formatters:
+  enable:
+    - gofmt
