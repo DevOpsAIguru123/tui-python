@@ -20,6 +20,11 @@ Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea), styl
 - Add, complete, and delete tasks
 - Tasks carry over between sessions
 
+### Calendar Tab
+- Read-only view of upcoming events from macOS Calendar.app (next 7 days)
+- Events fetched via `osascript` — no OAuth, no extra setup
+- First run may prompt "Terminal wants to access Calendar" in System Settings → Privacy → Automation
+
 ---
 
 ## Requirements
@@ -149,13 +154,31 @@ Today's Tasks
 | `enter` | Confirm new task |
 | `esc` | Cancel input |
 
+### Calendar tab
+
+```
+Upcoming — next 7 days
+
+── Fri, Apr 17 ──────────────────────
+▸ 9:00am–9:15am   Standup  Work
+  2:00pm–3:00pm   Dentist  @ Downtown  Personal
+
+↑↓ nav • r refresh
+```
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Navigate event list |
+| `r` | Refresh from Calendar.app |
+
 ### Global
 
 | Key | Action |
 |-----|--------|
-| `tab` | Switch between WiFi and Todo tabs |
+| `tab` | Cycle through tabs |
 | `1` | Go to WiFi tab |
 | `2` | Go to Todo tab |
+| `3` | Go to Calendar tab |
 | `q` / `ctrl+c` | Quit |
 
 ---
@@ -184,7 +207,8 @@ The WiFi interface (`en0`, `en1`, etc.) is auto-detected at startup via `network
 main.go
 └── AppModel              root model, owns tab state
     ├── WifiModel         WiFi tab: state machine, async shell commands
-    └── TodoModel         Todo tab: task list, text input
+    ├── TodoModel         Todo tab: task list, text input
+    └── CalendarModel     Calendar tab: read-only agenda via osascript
 
 ~/.config/daily-tui/
 ├── config.yaml           daily-reset network names
@@ -215,6 +239,11 @@ daily-tui/
 │   ├── todo/
 │   │   ├── model.go          TodoModel: state, Update, View
 │   │   ├── store.go          JSON persistence
+│   │   └── *_test.go
+│   ├── calendar/
+│   │   ├── model.go          CalendarModel: agenda view
+│   │   ├── source.go         osascript fetch + parser
+│   │   ├── commands.go       tea.Cmd wrappers
 │   │   └── *_test.go
 │   ├── config/
 │   │   ├── config.go         YAML config loading
