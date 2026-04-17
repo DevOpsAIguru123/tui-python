@@ -71,16 +71,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if msg.Type == tea.KeyRunes {
-				switch string(msg.Runes) {
-				case "1":
-					m.activeTab = tabWifi
-					return m, nil
-				case "2":
-					m.activeTab = tabTodo
-					return m, nil
-				case "3":
-					m.activeTab = tabCalendar
-					return m, nil
+				// When the Calendar tab is active, 1 / 2 / 3 switch its
+				// time-range filters instead of tabs. The user can still
+				// reach other tabs via Tab.
+				if m.activeTab != tabCalendar {
+					switch string(msg.Runes) {
+					case "1":
+						m.activeTab = tabWifi
+						return m, nil
+					case "2":
+						m.activeTab = tabTodo
+						return m, nil
+					case "3":
+						m.activeTab = tabCalendar
+						return m, nil
+					}
 				}
 			}
 		}
