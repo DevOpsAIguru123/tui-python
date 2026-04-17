@@ -60,9 +60,21 @@ func TestAppModelNumberKeySwitch(t *testing.T) {
 	if am.ActiveTab() != 2 {
 		t.Errorf("expected tab 2 after '3', got %d", am.ActiveTab())
 	}
+	// On the Calendar tab, '1' / '2' / '3' are claimed by the child for
+	// view filters — they must NOT switch tabs. Tab key still does.
+	updated, _ = am.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	am = updated.(app.Model)
+	if am.ActiveTab() != 2 {
+		t.Errorf("expected calendar tab to consume '1'; tab changed to %d", am.ActiveTab())
+	}
+	updated, _ = am.Update(tea.KeyMsg{Type: tea.KeyTab})
+	am = updated.(app.Model)
+	if am.ActiveTab() != 0 {
+		t.Errorf("expected wrap to tab 0 after Tab from Calendar, got %d", am.ActiveTab())
+	}
 	updated, _ = am.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
 	am = updated.(app.Model)
 	if am.ActiveTab() != 0 {
-		t.Errorf("expected tab 0 after '1', got %d", am.ActiveTab())
+		t.Errorf("expected tab 0 after '1' from WiFi tab, got %d", am.ActiveTab())
 	}
 }
