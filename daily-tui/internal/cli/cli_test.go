@@ -173,6 +173,111 @@ func TestPortfolioAddListPriceRm(t *testing.T) {
 	}
 }
 
+type stubFetcher struct {
+	prices map[string]float64
+	errs   map[string]error
+	calls  []string
+}
+
+func (f *stubFetcher) Fetch(ticker string) (float64, error) {
+	f.calls = append(f.calls, ticker)
+	if err, ok := f.errs[ticker]; ok {
+		return 0, err
+	}
+	return f.prices[ticker], nil
+}
+
+func TestPortfolioRefreshAll(t *testing.T) {
+	env, stdout, stderr, _ := newTestEnv(t)
+	if code := Run(env, []string{"portfolio", "add", "aapl", "10", "150"}); code != 0 {
+		t.Fatalf("seed aapl: stderr=%q", stderr.String())
+	}
+	if code := Run(env, []string{"portfolio", "add", "msft", "5", "300"}); code != 0 {
+		t.Fatalf("seed msft: stderr=%q", stderr.String())
+	}
+
+	env.PriceFetcher = &stubFetcher{prices: map[string]float64{"AAPL": 201.5, "MSFT": 410.25}}
+	stdout.Reset()
+	if code := Run(env, []string{"portfolio", "refresh"}); code != 0 {
+		t.Fatalf("refresh exit = %d, stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "AAPL  201.5") || !strings.Contains(out, "MSFT  410.25") {
+		t.Errorf("refresh output = %q", out)
+	}
+
+	stdout.Reset()
+	Run(env, []string{"portfolio", "list"})
+	if !strings.Contains(stdout.String(), "market_value=4066.25") {
+		t.Errorf("market value after refresh wrong: %q", stdout.String())
+	}
+}
+
+func TestPortfolioRefreshSingle(t *testing.T) {
+	env, stdout, stderr, _ := newTestEnv(t)
+	Run(env, []string{"portfolio", "add", "aapl", "10", "150"})
+	Run(env, []string{"portfolio", "add", "msft", "5", "300"})
+
+	fetcher := &stubFetcher{prices: map[string]float64{"AAPL": 201.5, "MSFT": 410.25}}
+	env.PriceFetcher = fetcher
+	stdout.Reset()
+	if code := Run(env, []string{"portfolio", "refresh", "msft"}); code != 0 {
+		t.Fatalf("refresh exit = %d, stderr=%q", code, stderr.String())
+	}
+	if len(fetcher.calls) != 1 || fetcher.calls[0] != "MSFT" {
+		t.Errorf("expected single fetch of MSFT, got %v", fetcher.calls)
+	}
+	if !strings.Contains(stdout.String(), "MSFT  410.25") {
+		t.Errorf("refresh single output = %q", stdout.String())
+	}
+}
+
+func TestPortfolioRefreshUnknownTicker(t *testing.T) {
+	env, _, stderr, _ := newTestEnv(t)
+	Run(env, []string{"portfolio", "add", "aapl", "10", "150"})
+	env.PriceFetcher = &stubFetcher{}
+	if code := Run(env, []string{"portfolio", "refresh", "zzzz"}); code == 0 {
+		t.Error("refresh with unknown holding should fail")
+	}
+	if !strings.Contains(stderr.String(), "no holding for") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
+func TestPortfolioRefreshFetchErrorExitsNonZero(t *testing.T) {
+	env, stdout, stderr, _ := newTestEnv(t)
+	Run(env, []string{"portfolio", "add", "aapl", "10", "150"})
+	Run(env, []string{"portfolio", "add", "msft", "5", "300"})
+
+	env.PriceFetcher = &stubFetcher{
+		prices: map[string]float64{"AAPL": 201.5},
+		errs:   map[string]error{"MSFT": fmt.Errorf("boom")},
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run(env, []string{"portfolio", "refresh"}); code != 1 {
+		t.Errorf("refresh with partial failure exit = %d, want 1", code)
+	}
+	// Succeeded rows still written.
+	if !strings.Contains(stdout.String(), "AAPL  201.5") {
+		t.Errorf("expected AAPL update even when MSFT failed: %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "MSFT: boom") {
+		t.Errorf("expected MSFT error on stderr: %q", stderr.String())
+	}
+}
+
+func TestPortfolioRefreshEmpty(t *testing.T) {
+	env, stdout, _, _ := newTestEnv(t)
+	env.PriceFetcher = &stubFetcher{}
+	if code := Run(env, []string{"portfolio", "refresh"}); code != 0 {
+		t.Errorf("refresh on empty store exit = %d", code)
+	}
+	if !strings.Contains(stdout.String(), "(no holdings)") {
+		t.Errorf("stdout = %q", stdout.String())
+	}
+}
+
 func TestPortfolioWatchRoundTrip(t *testing.T) {
 	env, stdout, stderr, _ := newTestEnv(t)
 

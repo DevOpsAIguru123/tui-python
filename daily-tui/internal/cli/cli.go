@@ -43,6 +43,9 @@ type Env struct {
 	// Defaults to exec.Command(...).CombinedOutput(); overridden in tests.
 	Runner func(name string, args ...string) ([]byte, error)
 	Now    func() time.Time
+	// PriceFetcher resolves live market prices for `portfolio refresh`.
+	// Defaults to portfolio.NewYahooFetcher(); stubbed in tests.
+	PriceFetcher portfolio.Fetcher
 }
 
 // Run dispatches args (os.Args[1:]) to the matching subcommand and
@@ -98,6 +101,7 @@ func listActions(w io.Writer) int {
 		"portfolio watch",
 		"portfolio add <ticker> <shares> <avg_cost> [last_price] [note]",
 		"portfolio price <ticker> <last_price>",
+		"portfolio refresh [ticker]",
 		"portfolio rm <ticker>",
 		"portfolio watch-add <ticker> [note]",
 		"portfolio watch-rm <ticker>",
@@ -211,7 +215,7 @@ func todoList(w io.Writer, s *todo.Store, args []string) int {
 func runPortfolio(env Env, args []string) int {
 	store := portfolio.NewStore(filepath.Join(env.ConfigDir, "portfolio.json"))
 	if len(args) == 0 {
-		fmt.Fprintln(env.Stderr, "portfolio: list | watch | add | price | rm | watch-add | watch-rm")
+		fmt.Fprintln(env.Stderr, "portfolio: list | watch | add | price | refresh | rm | watch-add | watch-rm")
 		return 1
 	}
 	switch args[0] {
@@ -223,6 +227,8 @@ func runPortfolio(env Env, args []string) int {
 		return portfolioAdd(env, store, args[1:])
 	case "price":
 		return portfolioPrice(env, store, args[1:])
+	case "refresh":
+		return portfolioRefresh(env, store, args[1:])
 	case "rm":
 		return portfolioRm(env, store, args[1:])
 	case "watch-add":
@@ -332,6 +338,48 @@ func portfolioPrice(env Env, s *portfolio.Store, args []string) int {
 	}
 	s.SetLastPrice(idx, price)
 	fmt.Fprintln(env.Stdout, "ok")
+	return 0
+}
+
+func portfolioRefresh(env Env, s *portfolio.Store, args []string) int {
+	if env.PriceFetcher == nil {
+		env.PriceFetcher = portfolio.NewYahooFetcher()
+	}
+	holdings := s.Holdings()
+	if len(holdings) == 0 {
+		fmt.Fprintln(env.Stdout, "(no holdings)")
+		return 0
+	}
+
+	targets := make([]int, 0, len(holdings))
+	if len(args) == 0 {
+		for i := range holdings {
+			targets = append(targets, i)
+		}
+	} else {
+		idx := findHolding(s, args[0])
+		if idx < 0 {
+			fmt.Fprintf(env.Stderr, "portfolio refresh: no holding for %q\n", args[0])
+			return 1
+		}
+		targets = append(targets, idx)
+	}
+
+	failures := 0
+	for _, i := range targets {
+		ticker := holdings[i].Ticker
+		price, err := env.PriceFetcher.Fetch(ticker)
+		if err != nil {
+			fmt.Fprintf(env.Stderr, "%s: %v\n", ticker, err)
+			failures++
+			continue
+		}
+		s.SetLastPrice(i, price)
+		fmt.Fprintf(env.Stdout, "%s  %s\n", ticker, strconv.FormatFloat(price, 'f', -1, 64))
+	}
+	if failures > 0 {
+		return 1
+	}
 	return 0
 }
 
