@@ -10,6 +10,7 @@ import (
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/portfolio"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/theme"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/todo"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/tux"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/wifi"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -193,6 +194,9 @@ func (m Model) renderSidebar() string {
 	sb.WriteString(theme.Brand.Render("daily-tui"))
 	sb.WriteString("\n")
 	sb.WriteString(theme.BrandSub.Render(m.brandSubtitle()))
+	sb.WriteString("\n\n")
+
+	sb.WriteString(tux.Render())
 	sb.WriteString("\n\n")
 
 	sb.WriteString(theme.SidebarLabel.Render("TABS"))
