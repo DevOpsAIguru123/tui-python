@@ -46,8 +46,26 @@ func (m Model) CurrentView() View { return m.view }
 // Count returns the number of loaded events (sidebar pill badge).
 func (m Model) Count() int { return len(m.events) }
 
-// Title is the subtitle shown in the breadcrumb header.
-func (m Model) Title() string { return "Agenda" }
+// Title is the subtitle shown in the breadcrumb header. It reflects the
+// currently-selected view filter and the number of events in it, so the
+// header doubles as a status readout.
+func (m Model) Title() string {
+	label := strings.ToLower(m.view.Label())
+	if m.loading {
+		return label + " · loading…"
+	}
+	if len(m.events) == 0 {
+		return label + " · empty"
+	}
+	return fmt.Sprintf("%s · %d event%s", label, len(m.events), plural(len(m.events)))
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
 
 // Help returns the key hints rendered by the help bar.
 func (m Model) Help() []theme.KeyHint {

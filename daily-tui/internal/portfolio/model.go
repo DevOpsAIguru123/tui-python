@@ -77,8 +77,23 @@ func (m Model) Count() int {
 	return len(m.store.Watchlist())
 }
 
-// Title is the subtitle shown in the breadcrumb header.
-func (m Model) Title() string { return "Portfolio" }
+// Title is the subtitle shown in the breadcrumb header. It reports the
+// active section and its row count so the breadcrumb is informative rather
+// than a static label.
+func (m Model) Title() string {
+	if m.section == SectionHoldings {
+		n := len(m.store.Holdings())
+		if n == 0 {
+			return "holdings · empty"
+		}
+		return fmt.Sprintf("holdings · %d", n)
+	}
+	n := len(m.store.Watchlist())
+	if n == 0 {
+		return "watchlist · empty"
+	}
+	return fmt.Sprintf("watchlist · %d", n)
+}
 
 // Help returns the key hints rendered by the help bar.
 func (m Model) Help() []theme.KeyHint {

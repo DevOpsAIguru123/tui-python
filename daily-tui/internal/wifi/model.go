@@ -62,8 +62,18 @@ func (m Model) CheckingInternet() bool { return m.checkingInternet }
 // Count returns the number of known networks, used by the sidebar count pill.
 func (m Model) Count() int { return len(m.networks) }
 
-// Title is the subtitle shown in the breadcrumb header.
-func (m Model) Title() string { return "Network Manager" }
+// Title is the subtitle shown in the breadcrumb header. It reflects live
+// state (connected SSID, scan count) rather than a static label so the
+// header becomes a status read at a glance.
+func (m Model) Title() string {
+	if m.connected != "" {
+		return m.connected
+	}
+	if len(m.networks) > 0 {
+		return fmt.Sprintf("%d saved", len(m.networks))
+	}
+	return "scanning…"
+}
 
 // Help returns the key hints shown in the bottom help bar.
 func (m Model) Help() []theme.KeyHint {

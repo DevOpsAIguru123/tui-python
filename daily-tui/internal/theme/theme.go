@@ -31,21 +31,44 @@ type KeyHint struct {
 	Label string
 }
 
+// GlobalKeys returns the navigation hints that every tab inherits (tab
+// cycling, quit). Rendered after the tab-specific hints, with a subtle
+// vertical divider, so users always know how to escape the current tab.
+func GlobalKeys() []KeyHint {
+	return []KeyHint{
+		{Key: "tab", Label: "switch"},
+		{Key: "q", Label: "quit"},
+	}
+}
+
 // RenderKeyHints returns a horizontal help bar of "[ key ] label" pairs.
 // Each key glyph is drawn inside a rounded keycap; the label sits to its
-// right, vertically centred against the 3-line cap block.
+// right, vertically centred against the 3-line cap block. The bar ends
+// with the global keys (tab, q) separated by a faint divider so they're
+// visually distinct from the per-tab actions.
 func RenderKeyHints(hints []KeyHint) string {
-	if len(hints) == 0 {
+	local := hints
+	global := GlobalKeys()
+	if len(local) == 0 && len(global) == 0 {
 		return ""
 	}
-	blocks := make([]string, 0, 2*len(hints)+1)
+	blocks := make([]string, 0, 2*(len(local)+len(global))+3)
 	blocks = append(blocks, "  ")
-	for i, h := range hints {
+	appendHint := func(i int, h KeyHint) {
 		if i > 0 {
 			blocks = append(blocks, "   ")
 		}
 		blocks = append(blocks, KeyCap.Render(h.Key))
 		blocks = append(blocks, " "+KeyDesc.Render(h.Label))
+	}
+	for i, h := range local {
+		appendHint(i, h)
+	}
+	if len(local) > 0 && len(global) > 0 {
+		blocks = append(blocks, "   "+CrumbSep.Render("│")+"   ")
+	}
+	for i, h := range global {
+		appendHint(i, h)
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Center, blocks...)
 }
@@ -155,6 +178,10 @@ var (
 
 	ConnectedDot  = lipgloss.NewStyle().Foreground(Green)
 	ConnectedText = lipgloss.NewStyle().Foreground(Green)
+
+	CompletedTask = lipgloss.NewStyle().
+			Foreground(Overlay).
+			Strikethrough(true)
 
 	SignalFilled = lipgloss.NewStyle().Foreground(Green)
 	SignalEmpty  = lipgloss.NewStyle().Foreground(Surface1)

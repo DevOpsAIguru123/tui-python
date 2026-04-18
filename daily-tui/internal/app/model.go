@@ -95,7 +95,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.wifi.SetRowWidth(m.mainWidth() - 6)
+		content := m.mainWidth() - 6
+		m.wifi.SetRowWidth(content)
+		m.todo.SetRowWidth(content)
 		return m, nil
 
 	case tickMsg:
@@ -216,15 +218,35 @@ func (m Model) renderSidebar() string {
 }
 
 func (m Model) brandSubtitle() string {
-	v := m.version
-	if v == "" {
-		v = "dev"
-	}
+	v := formatVersion(m.version)
 	iface := m.wifi.Iface()
 	if iface == "" {
+		return v
+	}
+	return v + " · " + iface
+}
+
+// formatVersion decides how to render a build-time version string. Semver-ish
+// values get a "v" prefix ("0.3.1" → "v0.3.1"); anything else (git SHA,
+// "dev", etc.) is passed through verbatim so we don't emit e.g. "vd9870be".
+func formatVersion(v string) string {
+	if v == "" {
+		return "dev"
+	}
+	if v == "dev" {
+		return v
+	}
+	first := v[0]
+	if first >= '0' && first <= '9' {
 		return "v" + v
 	}
-	return "v" + v + " · " + iface
+	if first == 'v' && len(v) > 1 {
+		next := v[1]
+		if next >= '0' && next <= '9' {
+			return v
+		}
+	}
+	return v
 }
 
 func (m Model) renderSidebarTab(i int, t tabSpec) string {
@@ -266,11 +288,16 @@ func (m Model) tabCountLabel(i int) string {
 	return "?"
 }
 
+// labelCount returns a 2-char right-aligned pill label so counts of different
+// magnitudes (e.g. "2" and "11") visually line up down the sidebar.
 func labelCount(n int) string {
 	if n <= 0 {
-		return "·"
+		return " ·"
 	}
-	return fmt.Sprintf("%d", n)
+	if n > 99 {
+		return "99"
+	}
+	return fmt.Sprintf("%2d", n)
 }
 
 func (m Model) renderSidebarHost() string {
