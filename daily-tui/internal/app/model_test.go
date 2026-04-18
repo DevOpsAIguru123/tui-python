@@ -45,6 +45,37 @@ func TestAppModelTabSwitch(t *testing.T) {
 	}
 }
 
+func TestClaudeTabRemainsNavigableAfterRun(t *testing.T) {
+	// Regression: a user reported "i could not navigate after command ran".
+	// After a RunDoneMsg lands on the Claude tab, the global Tab key and
+	// number keys must still cycle to other tabs. Inputting() always
+	// returning false on Claude is what guarantees this.
+	m := newApp(t)
+	// Switch to Claude tab.
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}})
+	m = updated.(app.Model)
+	if m.ActiveTab() != 4 {
+		t.Fatalf("setup: expected to be on Claude tab (4), got %d", m.ActiveTab())
+	}
+	// Press Enter to start a run, then deliver a RunDoneMsg manually.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(app.Model)
+	updated, _ = m.Update(claudecode.RunDoneMsg{Prompt: "hello", Output: "hi"})
+	m = updated.(app.Model)
+	// Tab from done-state Claude must wrap to WiFi (tab 0).
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(app.Model)
+	if m.ActiveTab() != 0 {
+		t.Errorf("expected Tab from done-Claude to go to WiFi (0), got %d", m.ActiveTab())
+	}
+	// Number key should also work — '3' from WiFi switches to Calendar.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	m = updated.(app.Model)
+	if m.ActiveTab() != 2 {
+		t.Errorf("expected '3' from WiFi to go to Calendar (2), got %d", m.ActiveTab())
+	}
+}
+
 func TestAppModelNumberKeySwitch(t *testing.T) {
 	m := newApp(t)
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})

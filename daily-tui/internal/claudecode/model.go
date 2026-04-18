@@ -234,7 +234,10 @@ func (m Model) startRun() (tea.Model, tea.Cmd) {
 	return m, RunCommandCmd(m.selected.Prompt, m.selected.ExtraArgs...)
 }
 
-// View renders the tab's content (no help bar — the app chrome draws that).
+// View renders the tab's content. Like the other tabs, it draws its own
+// help-keycap bar at the bottom (the app chrome doesn't render one) so
+// users can see the current key bindings — including the universal
+// "tab switch / 1-5 jump" hints that always work, even in the done state.
 func (m Model) View() string {
 	var sb strings.Builder
 
@@ -255,6 +258,9 @@ func (m Model) View() string {
 
 	sb.WriteString("\n")
 	sb.WriteString(m.renderOutput())
+
+	sb.WriteString("\n")
+	sb.WriteString(theme.RenderKeyHints(m.Help()))
 	return sb.String()
 }
 
