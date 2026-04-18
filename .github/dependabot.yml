@@ -1,13 +1,13 @@
 version: 2
 updates:
-  # Keep GitHub Actions up to date
+  # Keep GitHub Actions workflows up to date
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
 
-  # Example: if daily-tui is a Python project (uses pip / requirements.txt / pyproject.toml)
-  - package-ecosystem: "pip"
+  # Keep Go modules in daily-tui up to date
+  - package-ecosystem: "gomod"
     directory: "/daily-tui"
     schedule:
       interval: "weekly"
