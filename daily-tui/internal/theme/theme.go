@@ -124,7 +124,7 @@ var (
 		Padding(0, 1)
 
 	KeyDesc = lipgloss.NewStyle().
-			Foreground(Overlay)
+		Foreground(Overlay)
 
 	Crumb       = lipgloss.NewStyle().Foreground(Subtext0)
 	CrumbActive = lipgloss.NewStyle().Foreground(Text).Bold(true)
