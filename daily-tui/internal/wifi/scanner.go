@@ -9,8 +9,9 @@ import (
 
 // Network represents a nearby WiFi network.
 type Network struct {
-	SSID string
-	RSSI int // signal strength in dBm, e.g. -45
+	SSID     string
+	RSSI     int    // signal strength in dBm, e.g. -45 (0 when unknown)
+	Security string // e.g. "WPA2", "WPA3", or "" for open/unknown
 }
 
 var macRegex = regexp.MustCompile(`[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}`)
@@ -98,6 +99,11 @@ func BarString(bars int) string {
 	}
 	return blocks[bars]
 }
+
+// BarGlyphs returns the per-cell rune slice used to render a coloured signal
+// meter. Each cell is one of the four bar heights; cells above the active bar
+// count are rendered with a dim palette by the caller.
+func BarGlyphs() []rune { return []rune{'▂', '▄', '▆', '█'} }
 
 // ParseIpconfigSummary parses `ipconfig getsummary <iface>` output.
 // Returns (connected bool, ssid string). On macOS 13+, the SSID may be the

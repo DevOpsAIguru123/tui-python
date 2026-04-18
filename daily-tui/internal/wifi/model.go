@@ -1,7 +1,9 @@
 package wifi
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/theme"
@@ -31,7 +33,13 @@ type Model struct {
 	err              string
 	hasInternet      bool
 	checkingInternet bool
+	lastScanAt       time.Time
+	rowWidth         int
 }
+
+// SetRowWidth lets the app tell the wifi view how wide the content area is.
+// The view uses it to right-align the signal/dBm/security cluster.
+func (m *Model) SetRowWidth(w int) { m.rowWidth = w }
 
 // New creates a WifiModel with the given config.
 func New(cfg *config.Config) Model {
@@ -47,8 +55,35 @@ func (m Model) Cursor() int            { return m.cursor }
 func (m Model) Inputting() bool        { return m.state == stateInputting }
 func (m Model) Connecting() bool       { return m.state == stateConnecting }
 func (m Model) Connected() string      { return m.connected }
+func (m Model) Iface() string          { return m.iface }
 func (m Model) HasInternet() bool      { return m.hasInternet }
 func (m Model) CheckingInternet() bool { return m.checkingInternet }
+
+// Count returns the number of known networks, used by the sidebar count pill.
+func (m Model) Count() int { return len(m.networks) }
+
+// Title is the subtitle shown in the breadcrumb header.
+func (m Model) Title() string { return "Network Manager" }
+
+// Help returns the key hints shown in the bottom help bar.
+func (m Model) Help() []theme.KeyHint {
+	switch m.state {
+	case stateInputting:
+		return []theme.KeyHint{
+			{Key: "enter", Label: "submit"},
+			{Key: "esc", Label: "cancel"},
+		}
+	case stateConnecting:
+		return []theme.KeyHint{{Key: "esc", Label: "cancel"}}
+	default:
+		return []theme.KeyHint{
+			{Key: "↑↓", Label: "navigate"},
+			{Key: "enter", Label: "connect"},
+			{Key: "r", Label: "refresh"},
+			{Key: "esc", Label: "cancel"},
+		}
+	}
+}
 
 // SetNetworks sets the network list (used in tests and from ScanDoneMsg).
 func (m *Model) SetNetworks(n []Network) { m.networks = n }
@@ -77,6 +112,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.Err.Error()
 		} else {
 			m.networks = msg.Networks
+			m.lastScanAt = time.Now()
 			m.err = ""
 		}
 		return m, nil
@@ -232,42 +268,36 @@ func (m *Model) promptForNoInternet() tea.Cmd {
 	return nil
 }
 
-// View renders the WiFi tab content.
+// ---- View ----
+
+// View renders the WiFi tab content (no help bar — the app frame draws that).
 func (m Model) View() string {
 	var sb strings.Builder
 
-	if m.connected != "" {
-		status := "● Connected: " + m.connected
-		if m.checkingInternet {
-			sb.WriteString(theme.StatusOK.Render(status) + " " + theme.Dimmed.Render("(checking internet...)") + "\n")
-		} else if m.hasInternet {
-			sb.WriteString(theme.StatusOK.Render(status) + "\n")
-		} else {
-			sb.WriteString(theme.StatusOK.Render(status) + " " + theme.StatusErr.Render("(no internet)") + "\n")
+	status := m.renderStatusLine()
+	if meta := m.MetaRight(); meta != "" {
+		w := m.rowWidth
+		if w <= 0 {
+			w = 84
 		}
-	} else {
-		sb.WriteString(theme.Dimmed.Render("○ Not connected") + "\n")
+		status = padBetween(status, theme.MetaLine.Render(meta), w)
 	}
+	sb.WriteString(status)
+	sb.WriteString("\n")
 	if m.err != "" {
 		sb.WriteString(theme.StatusErr.Render("✗ "+m.err) + "\n")
 	}
 	sb.WriteString("\n")
 
+	sb.WriteString(renderSectionDivider("NEARBY NETWORKS"))
+	sb.WriteString("\n")
+
 	if len(m.networks) == 0 {
-		sb.WriteString(theme.Dimmed.Render("Loading saved networks...") + "\n")
+		sb.WriteString(theme.Dimmed.Render("  Loading saved networks...") + "\n")
 	} else {
-		sb.WriteString(theme.Dimmed.Render("Saved Networks") + "\n")
 		for i, n := range m.networks {
-			badge := ""
-			if m.cfg.IsDailyReset(n.SSID) {
-				badge = " " + theme.Badge.Render("[daily]")
-			}
-			line := n.SSID + badge
-			if i == m.cursor {
-				sb.WriteString(theme.Selected.Render("▸ "+line) + "\n")
-			} else {
-				sb.WriteString(theme.Normal.Render("  "+line) + "\n")
-			}
+			sb.WriteString(m.renderRow(n, i == m.cursor))
+			sb.WriteString("\n")
 		}
 	}
 
@@ -286,6 +316,155 @@ func (m Model) View() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(theme.HelpStyle.Render("↑↓ navigate • enter connect/reset pw • r refresh • esc cancel"))
+	sb.WriteString(theme.RenderKeyHints(m.Help()))
 	return sb.String()
+}
+
+// StatusLine returns just the left-side status line (for tests and for the
+// app chrome, which renders it alongside the "last scan" meta).
+func (m Model) renderStatusLine() string {
+	if m.connected == "" {
+		return theme.Dimmed.Render("○ Not connected")
+	}
+	status := theme.ConnectedDot.Render("● ") + theme.Dimmed.Render("Connected: ") +
+		theme.ConnectedText.Render(m.connected)
+	if m.checkingInternet {
+		status += " " + theme.Dimmed.Render("(checking internet...)")
+	} else if !m.hasInternet {
+		status += " " + theme.StatusErr.Render("(no internet)")
+	}
+	return status
+}
+
+// MetaRight returns the "last scan Xs ago" hint that sits on the right edge
+// of the status row when a scan has completed at least once.
+func (m Model) MetaRight() string {
+	if m.lastScanAt.IsZero() {
+		return ""
+	}
+	age := time.Since(m.lastScanAt)
+	return "last scan " + humanDuration(age) + " ago"
+}
+
+func (m Model) renderRow(n Network, selected bool) string {
+	caret := "  "
+	if selected {
+		caret = theme.CrumbCaret.Render("▸ ")
+	}
+
+	name := n.SSID
+	if selected {
+		name = theme.RowSelected.Render(name)
+	} else {
+		name = theme.Normal.Render(name)
+	}
+
+	var tags []string
+	if m.cfg != nil && m.cfg.IsDailyReset(n.SSID) {
+		tags = append(tags, theme.TagDaily.Render("daily"))
+	}
+	if n.SSID == m.connected {
+		tags = append(tags, theme.ConnectedDot.Render("● ")+theme.ConnectedText.Render("connected"))
+	} else if n.Security == "" && n.RSSI != 0 {
+		tags = append(tags, theme.TagOpen.Render("open"))
+	} else if n.SSID != m.connected && !(m.cfg != nil && m.cfg.IsDailyReset(n.SSID)) {
+		tags = append(tags, theme.Tag.Render("saved"))
+	}
+
+	left := caret + name
+	if len(tags) > 0 {
+		left += "  " + strings.Join(tags, " ")
+	}
+
+	// Right cluster: signal bars · dBm · security
+	right := renderSignal(n.RSSI) + "  " + renderDBm(n.RSSI) + "  " + renderSecurity(n.Security, n.RSSI)
+	w := m.rowWidth
+	if w <= 0 {
+		w = 84
+	}
+	return padBetween(left, right, w)
+}
+
+func renderSignal(rssi int) string {
+	glyphs := BarGlyphs()
+	bars := SignalBars(rssi)
+	if rssi == 0 {
+		bars = 0
+	}
+	var sb strings.Builder
+	for i, g := range glyphs {
+		if i < bars {
+			sb.WriteString(theme.SignalFilled.Render(string(g)))
+		} else {
+			sb.WriteString(theme.SignalEmpty.Render(string(g)))
+		}
+	}
+	return sb.String()
+}
+
+func renderDBm(rssi int) string {
+	if rssi == 0 {
+		return theme.Dimmed.Render("   —  ")
+	}
+	s := fmt.Sprintf("%4d dBm", rssi)
+	return theme.Dimmed.Render(s)
+}
+
+func renderSecurity(sec string, rssi int) string {
+	if sec == "" {
+		if rssi == 0 {
+			return theme.Dimmed.Render("—   ")
+		}
+		return theme.Dimmed.Render("--  ")
+	}
+	return theme.Dimmed.Render(fmt.Sprintf("%-4s", sec))
+}
+
+func renderSectionDivider(label string) string {
+	return theme.Dimmed.Render("── ") + theme.SectionHeader.Render(label) + " " +
+		theme.Dimmed.Render(strings.Repeat("─", 60))
+}
+
+// padBetween joins a left and right string with spaces so the rendered width
+// is at least `width`. Width is approximated by raw rune count because the
+// caller's styles don't widen the content (only colour).
+func padBetween(left, right string, width int) string {
+	leftW := visibleWidth(left)
+	rightW := visibleWidth(right)
+	pad := width - leftW - rightW
+	if pad < 2 {
+		pad = 2
+	}
+	return left + strings.Repeat(" ", pad) + right
+}
+
+// visibleWidth strips ANSI escape sequences and returns the rune count.
+func visibleWidth(s string) int {
+	out := make([]rune, 0, len(s))
+	inEsc := false
+	for _, r := range s {
+		if inEsc {
+			if r == 'm' {
+				inEsc = false
+			}
+			continue
+		}
+		if r == 0x1b {
+			inEsc = true
+			continue
+		}
+		out = append(out, r)
+	}
+	return len(out)
+}
+
+func humanDuration(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
 }

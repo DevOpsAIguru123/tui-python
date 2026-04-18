@@ -69,6 +69,44 @@ func (m Model) Cursor() int {
 	return m.watchCur
 }
 
+// Count returns the number of entries in the active section (sidebar badge).
+func (m Model) Count() int {
+	if m.section == SectionHoldings {
+		return len(m.store.Holdings())
+	}
+	return len(m.store.Watchlist())
+}
+
+// Title is the subtitle shown in the breadcrumb header.
+func (m Model) Title() string { return "Portfolio" }
+
+// Help returns the key hints rendered by the help bar.
+func (m Model) Help() []theme.KeyHint {
+	if m.Inputting() {
+		return []theme.KeyHint{
+			{Key: "enter", Label: "next/confirm"},
+			{Key: "esc", Label: "cancel"},
+		}
+	}
+	if m.section == SectionHoldings {
+		return []theme.KeyHint{
+			{Key: "↑↓", Label: "navigate"},
+			{Key: "a", Label: "add"},
+			{Key: "e", Label: "edit"},
+			{Key: "d", Label: "delete"},
+			{Key: "p", Label: "price"},
+			{Key: "2", Label: "watchlist"},
+		}
+	}
+	return []theme.KeyHint{
+		{Key: "↑↓", Label: "navigate"},
+		{Key: "a", Label: "add"},
+		{Key: "e", Label: "edit"},
+		{Key: "d", Label: "delete"},
+		{Key: "1", Label: "holdings"},
+	}
+}
+
 // Init is a no-op.
 func (m Model) Init() tea.Cmd { return nil }
 
@@ -374,7 +412,7 @@ func (m Model) View() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(theme.HelpStyle.Render(m.helpLine()))
+	sb.WriteString(theme.RenderKeyHints(m.Help()))
 	return sb.String()
 }
 
@@ -504,16 +542,6 @@ func (m Model) formTitle() string {
 		return "Editing watchlist entry:"
 	}
 	return ""
-}
-
-func (m Model) helpLine() string {
-	if m.Inputting() {
-		return "enter next/confirm • esc cancel"
-	}
-	if m.section == SectionHoldings {
-		return "↑↓ nav • a add • e edit • d del • p price • 2 watchlist"
-	}
-	return "↑↓ nav • a add • e edit • d del • 1 holdings"
 }
 
 // ---- field parsing / formatting ----

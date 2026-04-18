@@ -43,6 +43,21 @@ func (m Model) Events() []Event { return m.events }
 // CurrentView returns the currently selected time-range filter.
 func (m Model) CurrentView() View { return m.view }
 
+// Count returns the number of loaded events (sidebar pill badge).
+func (m Model) Count() int { return len(m.events) }
+
+// Title is the subtitle shown in the breadcrumb header.
+func (m Model) Title() string { return "Agenda" }
+
+// Help returns the key hints rendered by the help bar.
+func (m Model) Help() []theme.KeyHint {
+	return []theme.KeyHint{
+		{Key: "↑↓", Label: "navigate"},
+		{Key: "1/2/3", Label: "view"},
+		{Key: "r", Label: "refresh"},
+	}
+}
+
 // Init kicks off the initial fetch (or returns nil on unsupported OS).
 func (m Model) Init() tea.Cmd {
 	if !Supported() {
@@ -143,7 +158,7 @@ func (m Model) View() string {
 	if m.loading {
 		sb.WriteString(theme.Dimmed.Render("  Loading events..."))
 		sb.WriteString("\n\n")
-		sb.WriteString(theme.HelpStyle.Render("1/2/3 switch view • r refresh"))
+		sb.WriteString(theme.RenderKeyHints(m.Help()))
 		return sb.String()
 	}
 
@@ -152,14 +167,17 @@ func (m Model) View() string {
 		sb.WriteString("\n")
 		sb.WriteString(theme.Dimmed.Render("  First run may need to grant Terminal access to Calendar in System Settings → Privacy."))
 		sb.WriteString("\n\n")
-		sb.WriteString(theme.HelpStyle.Render("1/2/3 switch view • r retry"))
+		sb.WriteString(theme.RenderKeyHints([]theme.KeyHint{
+			{Key: "1/2/3", Label: "view"},
+			{Key: "r", Label: "retry"},
+		}))
 		return sb.String()
 	}
 
 	if len(m.events) == 0 {
 		sb.WriteString(theme.Dimmed.Render("  No events in " + strings.ToLower(m.view.Label())))
 		sb.WriteString("\n\n")
-		sb.WriteString(theme.HelpStyle.Render("1/2/3 switch view • r refresh"))
+		sb.WriteString(theme.RenderKeyHints(m.Help()))
 		return sb.String()
 	}
 
@@ -179,7 +197,7 @@ func (m Model) View() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(theme.HelpStyle.Render("↑↓ nav • 1/2/3 switch view • r refresh"))
+	sb.WriteString(theme.RenderKeyHints(m.Help()))
 	return sb.String()
 }
 

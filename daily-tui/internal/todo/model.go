@@ -36,6 +36,38 @@ func (m Model) Inputting() bool { return m.adding || m.editing }
 func (m Model) Tasks() []Task   { return m.tasks }
 func (m Model) Cursor() int     { return m.cursor }
 
+// Count returns the number of pending tasks (shown as the sidebar count pill).
+func (m Model) Count() int {
+	pending, _ := splitTasks(m.tasks)
+	return len(pending)
+}
+
+// Title is the subtitle shown in the breadcrumb header.
+func (m Model) Title() string { return "Tasks" }
+
+// Help returns the key hints rendered by the app's bottom help bar.
+func (m Model) Help() []theme.KeyHint {
+	if m.adding {
+		return []theme.KeyHint{
+			{Key: "enter", Label: "confirm"},
+			{Key: "esc", Label: "cancel"},
+		}
+	}
+	if m.editing {
+		return []theme.KeyHint{
+			{Key: "enter", Label: "save"},
+			{Key: "esc", Label: "cancel"},
+		}
+	}
+	return []theme.KeyHint{
+		{Key: "↑↓", Label: "navigate"},
+		{Key: "space", Label: "done"},
+		{Key: "e", Label: "edit"},
+		{Key: "d", Label: "delete"},
+		{Key: "a", Label: "add"},
+	}
+}
+
 // Init is a no-op.
 func (m Model) Init() tea.Cmd { return nil }
 
@@ -225,14 +257,7 @@ func (m Model) View() string {
 		sb.WriteString("\n" + m.input.View() + "\n")
 	}
 
-	// Help bar
 	sb.WriteString("\n")
-	if m.adding {
-		sb.WriteString(theme.HelpStyle.Render("enter confirm • esc cancel"))
-	} else if m.editing {
-		sb.WriteString(theme.HelpStyle.Render("enter save • esc cancel"))
-	} else {
-		sb.WriteString(theme.HelpStyle.Render("↑↓ nav • space done • e edit • d del • a add"))
-	}
+	sb.WriteString(theme.RenderKeyHints(m.Help()))
 	return sb.String()
 }

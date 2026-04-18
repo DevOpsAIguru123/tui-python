@@ -78,7 +78,8 @@ func TestVisualSmoke(t *testing.T) {
 	if !strings.Contains(m2.View(), "3/5 done") {
 		t.Error("expected '3/5 done' badge in mixed view (2 pending + 3 done)")
 	}
-	if !strings.Contains(m5.View(), "enter save") {
-		t.Error("expected edit-mode help text 'enter save' in edit view")
+	v5 := m5.View()
+	if !strings.Contains(v5, "enter") || !strings.Contains(v5, "save") {
+		t.Error("expected edit-mode help keycap 'enter' + 'save' label in edit view")
 	}
 }
