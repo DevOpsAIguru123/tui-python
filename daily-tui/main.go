@@ -7,6 +7,7 @@ import (
 
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/app"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/calendar"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/cli"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/portfolio"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/todo"
@@ -19,6 +20,12 @@ import (
 var version = "dev"
 
 func main() {
+	configDir := filepath.Join(os.Getenv("HOME"), ".config", "daily-tui")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "error creating config dir: %v\n", err)
+		os.Exit(1)
+	}
+
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--version", "-v":
@@ -27,19 +34,25 @@ func main() {
 		case "--help", "-h":
 			fmt.Println("daily-tui — terminal dashboard for WiFi & tasks")
 			fmt.Println()
-			fmt.Println("Usage: daily-tui [flags]")
+			fmt.Println("Usage:")
+			fmt.Println("  daily-tui                  Launch the TUI")
+			fmt.Println("  daily-tui actions          List every CLI action")
+			fmt.Println("  daily-tui <area> <cmd>     Run an action non-interactively")
+			fmt.Println("                             (area: todo | portfolio | wifi | calendar)")
 			fmt.Println()
 			fmt.Println("Flags:")
 			fmt.Println("  -v, --version   Print version and exit")
 			fmt.Println("  -h, --help      Show this help message")
 			return
 		}
-	}
-
-	configDir := filepath.Join(os.Getenv("HOME"), ".config", "daily-tui")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating config dir: %v\n", err)
-		os.Exit(1)
+		if cli.IsSubcommand(os.Args[1]) {
+			os.Exit(cli.Run(cli.Env{
+				ConfigDir: configDir,
+				Stdout:    os.Stdout,
+				Stderr:    os.Stderr,
+				Stdin:     os.Stdin,
+			}, os.Args[1:]))
+		}
 	}
 
 	cfg, err := config.Load()
