@@ -24,6 +24,27 @@ func TestNewLoadsBuiltinHello(t *testing.T) {
 	}
 }
 
+func TestNetworkMonitorBuiltinHasSkipPermissionsFlag(t *testing.T) {
+	m := claudecode.New()
+	var got *claudecode.Command
+	for i := range m.Commands() {
+		c := m.Commands()[i]
+		if c.Name == "network-monitor" {
+			got = &c
+			break
+		}
+	}
+	if got == nil {
+		t.Fatal("expected 'network-monitor' builtin command to be registered")
+	}
+	if got.Prompt != "run this skill /network-monitor" {
+		t.Errorf("unexpected prompt: %q", got.Prompt)
+	}
+	if len(got.ExtraArgs) != 1 || got.ExtraArgs[0] != "--dangerously-skip-permissions" {
+		t.Errorf("expected ExtraArgs=[--dangerously-skip-permissions], got %v", got.ExtraArgs)
+	}
+}
+
 func TestCursorNavigation(t *testing.T) {
 	m := claudecode.New()
 	if m.Cursor() != 0 {

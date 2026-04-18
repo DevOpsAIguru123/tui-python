@@ -22,15 +22,20 @@ type RunDoneMsg struct {
 // forever.
 const runTimeout = 5 * time.Minute
 
-// RunCommandCmd shells out to `claude -p <prompt>` and returns a RunDoneMsg
-// when it finishes. CombinedOutput is used so any error text printed on
-// stderr (auth failure, invalid flag, etc.) still reaches the user — a
-// silently-empty pane is worse than a visible error.
-func RunCommandCmd(prompt string) tea.Cmd {
+// RunCommandCmd shells out to `claude -p <prompt> [extraArgs...]` and returns
+// a RunDoneMsg when it finishes. CombinedOutput is used so any error text
+// printed on stderr (auth failure, invalid flag, etc.) still reaches the
+// user — a silently-empty pane is worse than a visible error.
+//
+// extraArgs are appended after the prompt. They exist so a command entry
+// can carry extra flags (for example --dangerously-skip-permissions) that
+// a specific skill invocation requires.
+func RunCommandCmd(prompt string, extraArgs ...string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 		defer cancel()
-		out, err := exec.CommandContext(ctx, "claude", "-p", prompt).CombinedOutput()
+		argv := append([]string{"-p", prompt}, extraArgs...)
+		out, err := exec.CommandContext(ctx, "claude", argv...).CombinedOutput()
 		return RunDoneMsg{Prompt: prompt, Output: string(out), Err: err}
 	}
 }

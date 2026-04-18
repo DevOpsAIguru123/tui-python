@@ -14,6 +14,12 @@ import (
 func Discover() []Command {
 	out := []Command{
 		{Name: "hello", Prompt: "hello", Source: "builtin"},
+		{
+			Name:      "network-monitor",
+			Prompt:    "run this skill /network-monitor",
+			ExtraArgs: []string{"--dangerously-skip-permissions"},
+			Source:    "builtin",
+		},
 	}
 
 	if home, err := os.UserHomeDir(); err == nil {

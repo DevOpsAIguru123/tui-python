@@ -146,7 +146,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.output = ""
 		m.err = ""
 		m.startAt = time.Now()
-		return m, RunCommandCmd(m.selected.Prompt)
+		return m, RunCommandCmd(m.selected.Prompt, m.selected.ExtraArgs...)
 	case tea.KeyEsc:
 		if m.state == stateDone {
 			m.state = stateBrowsing
@@ -220,7 +220,28 @@ func (m Model) renderRow(c Command, selected bool) string {
 	}
 	tag := theme.Tag.Render(c.Source)
 	prompt := theme.Dimmed.Render(c.Prompt)
-	return caret + name + "  " + tag + "  " + prompt
+	row := caret + name + "  " + tag + "  " + prompt
+
+	// Make it obvious up-front when an entry carries "dangerous" flags like
+	// --dangerously-skip-permissions. Flag-free commands render unchanged.
+	if len(c.ExtraArgs) > 0 {
+		flags := strings.Join(c.ExtraArgs, " ")
+		if hasDangerousFlag(c.ExtraArgs) {
+			row += "  " + theme.StatusErr.Render(flags)
+		} else {
+			row += "  " + theme.Dimmed.Render(flags)
+		}
+	}
+	return row
+}
+
+func hasDangerousFlag(args []string) bool {
+	for _, a := range args {
+		if strings.Contains(a, "dangerously") {
+			return true
+		}
+	}
+	return false
 }
 
 // renderOutput draws whatever's appropriate below the command list:
