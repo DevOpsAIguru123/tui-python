@@ -42,10 +42,17 @@ func New() Model {
 	return Model{commands: Discover()}
 }
 
-// Inputting reports whether the tab owns all keys. It does during an active
-// run so the user can't tab-switch out of a pending job; otherwise the app
-// chrome can intercept tab/number keys as usual.
-func (m Model) Inputting() bool { return m.state == stateRunning }
+// Inputting reports whether the tab owns all keys. The Claude tab never
+// takes raw text input (runs are fire-and-forget), so this is always false
+// — the user is free to tab away to another pane while a command is still
+// executing. The RunDoneMsg is routed back to this tab regardless of where
+// the user is when the run finishes, so nothing is lost by switching away.
+//
+// While a run is in-flight the tab's own handleKey still swallows keystrokes
+// that arrive on the active pane (Enter, arrow keys) so the user can't
+// accidentally launch a second run; returning false here just means the
+// app chrome's tab/number keys keep working.
+func (m Model) Inputting() bool { return false }
 
 // Commands exposes the loaded command list for tests.
 func (m Model) Commands() []Command { return m.commands }

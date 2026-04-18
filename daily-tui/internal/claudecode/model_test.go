@@ -37,7 +37,7 @@ func TestNetworkMonitorBuiltinHasSkipPermissionsFlag(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected 'network-monitor' builtin command to be registered")
 	}
-	if got.Prompt != "run this skill /network-monitor" {
+	if got.Prompt != "run this skill /network-monitor and store results in llm wiki" {
 		t.Errorf("unexpected prompt: %q", got.Prompt)
 	}
 	if len(got.ExtraArgs) != 1 || got.ExtraArgs[0] != "--dangerously-skip-permissions" {
@@ -69,11 +69,16 @@ func TestEnterStartsRun(t *testing.T) {
 	m := claudecode.New()
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m2 := updated.(claudecode.Model)
-	if !m2.Inputting() {
-		t.Error("expected Inputting()=true after Enter (running state)")
+	if m2.State() == 0 {
+		t.Error("expected state to advance past browsing after Enter")
 	}
 	if cmd == nil {
 		t.Error("expected a tea.Cmd (RunCommandCmd) after Enter")
+	}
+	// Inputting must remain false even during a run so the app chrome
+	// can still intercept tab/number keys for navigation.
+	if m2.Inputting() {
+		t.Error("expected Inputting()=false during runs so tab-switching still works")
 	}
 }
 
@@ -84,9 +89,6 @@ func TestRunDoneTransitionsToDone(t *testing.T) {
 	m = updated.(claudecode.Model)
 	updated, _ = m.Update(claudecode.RunDoneMsg{Prompt: "hello", Output: "hi there"})
 	m2 := updated.(claudecode.Model)
-	if m2.Inputting() {
-		t.Error("expected not-inputting after RunDoneMsg")
-	}
 	if !strings.Contains(m2.View(), "hi there") {
 		t.Errorf("expected output 'hi there' rendered in View, got:\n%s", m2.View())
 	}

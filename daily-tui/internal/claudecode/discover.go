@@ -16,7 +16,7 @@ func Discover() []Command {
 		{Name: "hello", Prompt: "hello", Source: "builtin"},
 		{
 			Name:      "network-monitor",
-			Prompt:    "run this skill /network-monitor",
+			Prompt:    "run this skill /network-monitor and store results in llm wiki",
 			ExtraArgs: []string{"--dangerously-skip-permissions"},
 			Source:    "builtin",
 		},
