@@ -383,7 +383,7 @@ func (m Model) renderStatusBadge(name string) string {
 	case runDone:
 		dur := r.FinishAt.Sub(r.StartAt).Truncate(time.Millisecond)
 		if r.Err != "" {
-			return theme.StatusErr.Render("✗ "+dur.String()+" failed")
+			return theme.StatusErr.Render("✗ " + dur.String() + " failed")
 		}
 		return theme.ConnectedDot.Render("✓ ") +
 			theme.Dimmed.Render(dur.String())
