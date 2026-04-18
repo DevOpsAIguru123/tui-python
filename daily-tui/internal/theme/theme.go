@@ -31,44 +31,25 @@ type KeyHint struct {
 	Label string
 }
 
-// GlobalKeys returns the navigation hints that every tab inherits (tab
-// cycling, quit). Rendered after the tab-specific hints, with a subtle
-// vertical divider, so users always know how to escape the current tab.
-func GlobalKeys() []KeyHint {
-	return []KeyHint{
-		{Key: "tab", Label: "switch"},
-		{Key: "q", Label: "quit"},
-	}
-}
-
 // RenderKeyHints returns a horizontal help bar of "[ key ] label" pairs.
 // Each key glyph is drawn inside a rounded keycap; the label sits to its
-// right, vertically centred against the 3-line cap block. Global keys
-// (tab, q) are appended after the tab-specific hints with slightly extra
-// breathing room so they read as universal.
+// right, vertically centred against the 3-line cap block.
+//
+// Global keys (tab / q) are intentionally NOT rendered here. On narrower
+// terminals they were pushing the trailing keycap past the pane's right
+// edge, and they're universal TUI conventions users pick up quickly.
 func RenderKeyHints(hints []KeyHint) string {
-	local := hints
-	global := GlobalKeys()
-	if len(local) == 0 && len(global) == 0 {
+	if len(hints) == 0 {
 		return ""
 	}
-	blocks := make([]string, 0, 2*(len(local)+len(global))+2)
+	blocks := make([]string, 0, 2*len(hints)+1)
 	blocks = append(blocks, " ")
-	appendHint := func(i int, h KeyHint) {
+	for i, h := range hints {
 		if i > 0 {
 			blocks = append(blocks, "  ")
 		}
 		blocks = append(blocks, KeyCap.Render(h.Key))
 		blocks = append(blocks, " "+KeyDesc.Render(h.Label))
-	}
-	for i, h := range local {
-		appendHint(i, h)
-	}
-	if len(local) > 0 && len(global) > 0 {
-		blocks = append(blocks, "    ")
-	}
-	for i, h := range global {
-		appendHint(i, h)
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Center, blocks...)
 }

@@ -97,6 +97,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		content := m.mainWidth() - 6
 		m.wifi.SetRowWidth(content)
 		m.todo.SetRowWidth(content)
+		m.calendar.SetRowWidth(content)
 		return m, nil
 
 	case tickMsg:
@@ -290,6 +291,15 @@ func (m Model) renderSidebarHost() string {
 		sb.WriteString(theme.SidebarPromptVal.Render(iface))
 		sb.WriteString("\n")
 	}
+
+	// Global keys live here (always visible, never overflow the main pane).
+	sb.WriteString("\n")
+	sb.WriteString(theme.SidebarLabel.Render("KEYS"))
+	sb.WriteString("\n")
+	sb.WriteString(theme.KeyDesc.Render("tab ") + theme.Dimmed.Render("switch"))
+	sb.WriteString("\n")
+	sb.WriteString(theme.KeyDesc.Render("q   ") + theme.Dimmed.Render("quit"))
+	sb.WriteString("\n")
 	return sb.String()
 }
 

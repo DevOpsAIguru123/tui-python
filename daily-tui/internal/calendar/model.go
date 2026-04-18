@@ -18,7 +18,12 @@ type Model struct {
 	loading   bool
 	err       error
 	fetchedAt time.Time
+	rowWidth  int
 }
+
+// SetRowWidth receives the main-pane content width from the app so the tab
+// can clip long event lines before they overflow the right edge.
+func (m *Model) SetRowWidth(w int) { m.rowWidth = w }
 
 // New creates a Calendar model. Fetch is kicked off by Init.
 // If a fresh on-disk cache exists for the default view, its events are
@@ -58,21 +63,6 @@ func (m Model) Title() string {
 		return label + " · empty"
 	}
 	return fmt.Sprintf("%s · %d event%s", label, len(m.events), plural(len(m.events)))
-}
-
-// clipLocation shortens an event location string to at most max runes,
-// appending an ellipsis if anything was cut. The calendar row doesn't need
-// the full address — a recognisable prefix is enough and leaves room for
-// the event title and calendar badge on the same line.
-func clipLocation(s string, max int) string {
-	runes := []rune(s)
-	if len(runes) <= max {
-		return s
-	}
-	if max <= 1 {
-		return "…"
-	}
-	return string(runes[:max-1]) + "…"
 }
 
 func plural(n int) string {
@@ -225,7 +215,7 @@ func (m Model) View() string {
 				theme.Dimmed.Render("──────────────────────") + "\n")
 			lastDay = day
 		}
-		sb.WriteString(renderEventLine(e, i == m.cursor))
+		sb.WriteString(renderEventLine(e, i == m.cursor, m.rowWidth))
 		sb.WriteString("\n")
 	}
 
@@ -277,7 +267,11 @@ func humanAge(d time.Duration) string {
 	}
 }
 
-func renderEventLine(e Event, selected bool) string {
+// renderEventLine renders one agenda row. The pane's usable width (rowWidth)
+// is used to clip the overall line so the trailing calendar badge never gets
+// shoved off the right edge when title + location add up to a long string.
+// When rowWidth is 0 (not yet sized) the line flows at natural width.
+func renderEventLine(e Event, selected bool, rowWidth int) string {
 	var when string
 	if e.IsAllDay() {
 		when = "all-day"
@@ -286,17 +280,81 @@ func renderEventLine(e Event, selected bool) string {
 			e.Start.Format("3:04pm"),
 			e.End.Format("3:04pm"))
 	}
-	line := fmt.Sprintf("%-13s %s", when, e.Title)
-	if e.Location != "" {
-		// Clip long locations so a single event can't push the row past the
-		// pane's right edge (e.g. "@ Austin Central Library, Austin, TX").
-		line += theme.Dimmed.Render("  @ " + clipLocation(e.Location, 28))
-	}
-	if e.Calendar != "" {
-		line += "  " + theme.Badge.Render(e.Calendar)
-	}
+	prefix := "  "
 	if selected {
-		return theme.Selected.Render("▸ " + line)
+		prefix = theme.Selected.Render("▸ ")
 	}
-	return theme.Normal.Render("  " + line)
+
+	titleStyle := theme.Normal
+	if selected {
+		titleStyle = theme.Selected
+	}
+
+	// Plan a width budget: prefix + timeCol + title + (loc) + (badge) ≤ rowWidth.
+	timeCol := fmt.Sprintf("%-13s ", when)
+	budget := rowWidth
+	if budget <= 0 {
+		budget = 1000 // effectively unbounded
+	}
+	used := 2 + len(timeCol) // prefix + time col
+
+	var locPart, badgePart string
+	if e.Calendar != "" {
+		b := "  " + e.Calendar
+		if used+runeLen(e.Title)+runeLen(b) <= budget {
+			badgePart = "  " + theme.Badge.Render(e.Calendar)
+		}
+	}
+	if e.Location != "" {
+		remaining := budget - used - runeLen(e.Title) - visibleLen(badgePart)
+		if remaining > 6 {
+			loc := "  @ " + e.Location
+			if runeLen(loc) > remaining {
+				loc = "  @ " + clip(e.Location, remaining-4)
+			}
+			locPart = theme.Dimmed.Render(loc)
+		}
+	}
+
+	title := e.Title
+	titleBudget := budget - used - visibleLen(locPart) - visibleLen(badgePart)
+	if titleBudget > 0 && runeLen(title) > titleBudget {
+		title = clip(title, titleBudget)
+	}
+
+	return prefix + theme.Dimmed.Render(timeCol) + titleStyle.Render(title) + locPart + badgePart
+}
+
+func runeLen(s string) int { return len([]rune(s)) }
+
+// visibleLen strips ANSI escape sequences and returns the rune count; used
+// when measuring already-styled fragments against a rendered width budget.
+func visibleLen(s string) int {
+	out := 0
+	inEsc := false
+	for _, r := range s {
+		if inEsc {
+			if r == 'm' {
+				inEsc = false
+			}
+			continue
+		}
+		if r == 0x1b {
+			inEsc = true
+			continue
+		}
+		out++
+	}
+	return out
+}
+
+func clip(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	if n <= 1 {
+		return "…"
+	}
+	return string(r[:n-1]) + "…"
 }
