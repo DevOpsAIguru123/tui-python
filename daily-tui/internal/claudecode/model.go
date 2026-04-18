@@ -89,19 +89,22 @@ func (m Model) Title() string {
 	}
 }
 
-// Help returns the key hints shown in the app's bottom help bar. During the
-// "done" state the hints acknowledge that ↑↓/PgUp/PgDn scroll the output
-// viewport rather than the command list.
+// Help returns the key hints shown in the app's bottom help bar.
+//
+// In the "done" state ↑↓/enter still drive the command-list cursor (so the
+// user can pick a different command to run without first pressing esc), and
+// space/b page the output viewport. PgUp/PgDn are intentionally not advertised
+// because Macs don't have them as standalone keys.
 func (m Model) Help() []theme.KeyHint {
 	switch m.state {
 	case stateRunning:
 		return []theme.KeyHint{{Key: "…", Label: "running"}}
 	case stateDone:
 		return []theme.KeyHint{
-			{Key: "↑↓", Label: "scroll"},
-			{Key: "pgup/dn", Label: "page"},
-			{Key: "enter", Label: "run again"},
-			{Key: "esc", Label: "back"},
+			{Key: "↑↓", Label: "navigate"},
+			{Key: "enter", Label: "run"},
+			{Key: "space", Label: "scroll"},
+			{Key: "esc", Label: "clear"},
 		}
 	default:
 		return []theme.KeyHint{
@@ -184,36 +187,40 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// In the "done" state, arrow + page keys drive the output viewport
-	// instead of the command-list cursor — the user is reading output, not
-	// re-picking a command. Enter re-runs the last command, Esc goes back.
-	if m.state == stateDone {
-		switch msg.Type {
-		case tea.KeyEnter:
-			return m.startRun()
-		case tea.KeyEsc:
-			m.state = stateBrowsing
-			m.output = ""
-			m.err = ""
-			m.vp.SetContent("")
-			return m, nil
-		}
-		var cmd tea.Cmd
-		m.vp, cmd = m.vp.Update(msg)
-		return m, cmd
-	}
-
+	// browsing AND done both share the same command-list bindings. The user
+	// can move the cursor and pick a different command without first
+	// dismissing the previous output. Esc explicitly clears the output and
+	// returns to a clean browsing view. Anything else (space/b/f/j/k/etc.)
+	// is forwarded to the output viewport so its native scroll keys keep
+	// working without us advertising Mac-unfriendly PgUp/PgDn.
 	switch msg.Type {
 	case tea.KeyUp:
 		if m.cursor > 0 {
 			m.cursor--
 		}
+		return m, nil
 	case tea.KeyDown:
 		if m.cursor < len(m.commands)-1 {
 			m.cursor++
 		}
+		return m, nil
 	case tea.KeyEnter:
 		return m.startRun()
+	case tea.KeyEsc:
+		if m.state == stateDone {
+			m.state = stateBrowsing
+			m.output = ""
+			m.err = ""
+			m.vp.SetContent("")
+		}
+		return m, nil
+	}
+
+	// Only forward to the viewport when there's something to scroll.
+	if m.state == stateDone {
+		var cmd tea.Cmd
+		m.vp, cmd = m.vp.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }

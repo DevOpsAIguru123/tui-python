@@ -101,6 +101,42 @@ func TestRunDoneTransitionsToDone(t *testing.T) {
 	}
 }
 
+func TestArrowKeysMoveCursorInDoneState(t *testing.T) {
+	// Regression: in the done state, ↑↓ used to be routed to the output
+	// viewport, leaving the user stuck on whichever command they'd just run
+	// — they couldn't move the cursor to "network-monitor" and press Enter
+	// to run it. Now arrows always navigate the command list.
+	m := claudecode.New()
+	m.SetRowWidth(80)
+	m.SetContentHeight(30)
+	if len(m.Commands()) < 2 {
+		t.Skip("need at least two commands to test cursor movement")
+	}
+	// Run the first command.
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(claudecode.Model)
+	updated, _ = m.Update(claudecode.RunDoneMsg{Prompt: "hello", Output: "x"})
+	m = updated.(claudecode.Model)
+	if m.Cursor() != 0 {
+		t.Fatalf("setup: expected cursor at 0 after run, got %d", m.Cursor())
+	}
+	// In done state, ↓ must advance the command-list cursor.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m2 := updated.(claudecode.Model)
+	if m2.Cursor() != 1 {
+		t.Errorf("expected ↓ in done state to move cursor to 1, got %d", m2.Cursor())
+	}
+	// Pressing Enter on the new cursor position should fire that command.
+	updated, cmd := m2.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m3 := updated.(claudecode.Model)
+	if cmd == nil {
+		t.Error("expected Enter on new cursor position to fire a tea.Cmd")
+	}
+	if m3.State() == 0 { // stateBrowsing
+		t.Error("expected state to advance past browsing after Enter on new cursor")
+	}
+}
+
 func TestEscAfterDoneReturnsToBrowse(t *testing.T) {
 	m := claudecode.New()
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
