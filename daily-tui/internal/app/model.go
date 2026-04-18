@@ -209,10 +209,16 @@ func (m Model) renderSidebar() string {
 	// style (below) can lay it out consistently.
 	top := sb.String()
 
+	// A single right-edge border acts as the visual divider between the
+	// sidebar and the main pane. Using a border (rather than a column of
+	// pipe characters) lets lipgloss stretch it to match the taller of the
+	// two panes automatically.
 	panel := lipgloss.NewStyle().
 		Width(sidebarWidth).
 		Padding(1, 2).
 		Foreground(theme.Text).
+		Border(lipgloss.NormalBorder(), false, true, false, false).
+		BorderForeground(theme.Surface1).
 		Render(top + "\n" + hostBlock)
 	return panel
 }
@@ -337,19 +343,25 @@ func (m Model) renderMain() string {
 	header := m.renderHeader(width)
 	content := m.activeView()
 
+	// Only pad; do NOT set Width. A fixed Width forces lipgloss to wrap any
+	// overflowing line (e.g. the help keycap bar on narrower terminals),
+	// which made the help bar break into a 2-row grid.
 	padded := lipgloss.NewStyle().
-		Width(width).
 		Padding(1, 2, 0, 2).
 		Render(header + "\n\n" + content)
 
 	return padded
 }
 
+// mainWidth reports the usable content width of the main pane. It accounts
+// for the sidebar itself (sidebarWidth), the sidebar's right border column
+// (+1), and the main pane's left+right padding (+4).
 func (m Model) mainWidth() int {
-	if m.width > sidebarWidth+20 {
-		return m.width - sidebarWidth
+	const chrome = sidebarWidth + 1 + 4
+	if m.width > chrome+20 {
+		return m.width - chrome
 	}
-	return 94
+	return 90
 }
 
 func (m Model) renderHeader(width int) string {
