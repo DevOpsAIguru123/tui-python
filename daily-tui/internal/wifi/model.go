@@ -66,13 +66,16 @@ func (m Model) Count() int { return len(m.networks) }
 // state (connected SSID, scan count) rather than a static label so the
 // header becomes a status read at a glance.
 func (m Model) Title() string {
-	if m.connected != "" {
+	switch {
+	case m.connected == "Wi-Fi":
+		return "connected · SSID hidden"
+	case m.connected != "":
 		return m.connected
-	}
-	if len(m.networks) > 0 {
+	case len(m.networks) > 0:
 		return fmt.Sprintf("%d saved", len(m.networks))
+	default:
+		return "scanning…"
 	}
-	return "scanning…"
 }
 
 // Help returns the key hints shown in the bottom help bar.
@@ -299,7 +302,7 @@ func (m Model) View() string {
 	}
 	sb.WriteString("\n")
 
-	sb.WriteString(renderSectionDivider("NEARBY NETWORKS"))
+	sb.WriteString(renderSectionDivider("SAVED NETWORKS"))
 	sb.WriteString("\n")
 
 	if len(m.networks) == 0 {
@@ -332,12 +335,23 @@ func (m Model) View() string {
 
 // StatusLine returns just the left-side status line (for tests and for the
 // app chrome, which renders it alongside the "last scan" meta).
+//
+// The special SSID "Wi-Fi" is a sentinel we emit when macOS redacts the real
+// SSID (Ventura+ without Location Services). We render it as a clear hint
+// rather than as a literal SSID so users don't confuse the placeholder with
+// an actual network name.
 func (m Model) renderStatusLine() string {
 	if m.connected == "" {
 		return theme.Dimmed.Render("○ Not connected")
 	}
-	status := theme.ConnectedDot.Render("● ") + theme.Dimmed.Render("Connected: ") +
-		theme.ConnectedText.Render(m.connected)
+	var status string
+	if m.connected == "Wi-Fi" {
+		status = theme.ConnectedDot.Render("● ") + theme.ConnectedText.Render("Connected") +
+			" " + theme.Dimmed.Render("(SSID hidden — grant Location Services)")
+	} else {
+		status = theme.ConnectedDot.Render("● ") + theme.Dimmed.Render("Connected: ") +
+			theme.ConnectedText.Render(m.connected)
+	}
 	if m.checkingInternet {
 		status += " " + theme.Dimmed.Render("(checking internet...)")
 	} else if !m.hasInternet {
@@ -377,17 +391,23 @@ func (m Model) renderRow(n Network, selected bool) string {
 		tags = append(tags, theme.ConnectedDot.Render("● ")+theme.ConnectedText.Render("connected"))
 	} else if n.Security == "" && n.RSSI != 0 {
 		tags = append(tags, theme.TagOpen.Render("open"))
-	} else if n.SSID != m.connected && !(m.cfg != nil && m.cfg.IsDailyReset(n.SSID)) {
-		tags = append(tags, theme.Tag.Render("saved"))
 	}
+	// "saved" is no longer shown — the whole list is saved networks, so the
+	// tag was pure noise. Only special-case tags (daily / connected / open)
+	// remain in the left cluster.
 
 	left := caret + name
 	if len(tags) > 0 {
 		left += "  " + strings.Join(tags, " ")
 	}
 
-	// Right cluster: signal bars · dBm · security
-	right := renderSignal(n.RSSI) + "  " + renderDBm(n.RSSI) + "  " + renderSecurity(n.Security, n.RSSI)
+	// Right cluster is only drawn when we actually have a scan reading. With
+	// preferred-networks-only listings on macOS 15+ we don't get RSSI, so
+	// padding the row with "— — —" dashes just ate horizontal space.
+	if n.RSSI == 0 {
+		return left
+	}
+	right := renderSignal(n.RSSI) + "  " + renderDBm(n.RSSI) + "  " + renderSecurity(n.Security)
 	w := m.rowWidth
 	if w <= 0 {
 		w = 84
@@ -395,39 +415,31 @@ func (m Model) renderRow(n Network, selected bool) string {
 	return padBetween(left, right, w)
 }
 
+// renderSignal draws a 4-dot signal indicator. Dots render reliably across
+// terminals and fonts — the earlier ▂▄▆█ staircase looked like a glitched
+// bar chart when the terminal didn't differentiate filled vs dim colours.
 func renderSignal(rssi int) string {
-	glyphs := BarGlyphs()
 	bars := SignalBars(rssi)
-	if rssi == 0 {
-		bars = 0
-	}
 	var sb strings.Builder
-	for i, g := range glyphs {
+	for i := 0; i < 4; i++ {
 		if i < bars {
-			sb.WriteString(theme.SignalFilled.Render(string(g)))
+			sb.WriteString(theme.SignalFilled.Render("●"))
 		} else {
-			sb.WriteString(theme.SignalEmpty.Render(string(g)))
+			sb.WriteString(theme.SignalEmpty.Render("○"))
 		}
 	}
 	return sb.String()
 }
 
 func renderDBm(rssi int) string {
-	if rssi == 0 {
-		return theme.Dimmed.Render("   —  ")
-	}
-	s := fmt.Sprintf("%4d dBm", rssi)
-	return theme.Dimmed.Render(s)
+	return theme.Dimmed.Render(fmt.Sprintf("%4d dBm", rssi))
 }
 
-func renderSecurity(sec string, rssi int) string {
+func renderSecurity(sec string) string {
 	if sec == "" {
-		if rssi == 0 {
-			return theme.Dimmed.Render("—   ")
-		}
-		return theme.Dimmed.Render("--  ")
+		return theme.Dimmed.Render("open")
 	}
-	return theme.Dimmed.Render(fmt.Sprintf("%-4s", sec))
+	return theme.Dimmed.Render(sec)
 }
 
 func renderSectionDivider(label string) string {

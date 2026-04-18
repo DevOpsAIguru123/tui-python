@@ -256,14 +256,10 @@ func (m Model) View() string {
 	doneCount := len(completed)
 	total := len(m.tasks)
 
-	// Header with task count
-	header := theme.Dimmed.Render("Today's Tasks")
-	if total > 0 {
-		header += "  " + theme.Badge.Render(fmt.Sprintf("%d/%d done", doneCount, total))
-	}
-	sb.WriteString(header + "\n")
-
-	// Progress bar — scale to the pane's usable width (minus room for "100%").
+	// The "Today's Tasks N/M done" header was intentionally removed —
+	// Title() already shows the same counts in the breadcrumb. The
+	// progress bar stays because it encodes the ratio visually, which
+	// the text breadcrumb doesn't.
 	if total > 0 {
 		barWidth := m.rowWidth - 10
 		if barWidth <= 0 {
