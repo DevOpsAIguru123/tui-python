@@ -69,6 +69,59 @@ func (m Model) Cursor() int {
 	return m.watchCur
 }
 
+// Count returns the number of entries in the active section (sidebar badge).
+func (m Model) Count() int {
+	if m.section == SectionHoldings {
+		return len(m.store.Holdings())
+	}
+	return len(m.store.Watchlist())
+}
+
+// Title is the subtitle shown in the breadcrumb header. It reports the
+// active section and its row count so the breadcrumb is informative rather
+// than a static label.
+func (m Model) Title() string {
+	if m.section == SectionHoldings {
+		n := len(m.store.Holdings())
+		if n == 0 {
+			return "holdings · empty"
+		}
+		return fmt.Sprintf("holdings · %d", n)
+	}
+	n := len(m.store.Watchlist())
+	if n == 0 {
+		return "watchlist · empty"
+	}
+	return fmt.Sprintf("watchlist · %d", n)
+}
+
+// Help returns the key hints rendered by the help bar.
+func (m Model) Help() []theme.KeyHint {
+	if m.Inputting() {
+		return []theme.KeyHint{
+			{Key: "enter", Label: "next/confirm"},
+			{Key: "esc", Label: "cancel"},
+		}
+	}
+	if m.section == SectionHoldings {
+		return []theme.KeyHint{
+			{Key: "↑↓", Label: "navigate"},
+			{Key: "a", Label: "add"},
+			{Key: "e", Label: "edit"},
+			{Key: "d", Label: "delete"},
+			{Key: "p", Label: "price"},
+			{Key: "2", Label: "watchlist"},
+		}
+	}
+	return []theme.KeyHint{
+		{Key: "↑↓", Label: "navigate"},
+		{Key: "a", Label: "add"},
+		{Key: "e", Label: "edit"},
+		{Key: "d", Label: "delete"},
+		{Key: "1", Label: "holdings"},
+	}
+}
+
 // Init is a no-op.
 func (m Model) Init() tea.Cmd { return nil }
 
@@ -374,7 +427,7 @@ func (m Model) View() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(theme.HelpStyle.Render(m.helpLine()))
+	sb.WriteString(theme.RenderKeyHints(m.Help()))
 	return sb.String()
 }
 
@@ -402,20 +455,22 @@ func (m Model) renderHoldings() string {
 		return sb.String()
 	}
 
-	header := fmt.Sprintf("  %-8s %-8s %-10s %-10s %-12s %-14s %s",
+	// P/L can run wide (e.g. "+$3263.01 (+141.58%)") so we give it a 22-col
+	// slot; Note is clipped to keep a single line from overflowing the pane.
+	header := fmt.Sprintf("  %-6s %-7s %-10s %-10s %-11s %-22s %s",
 		"Ticker", "Shares", "Avg Cost", "Last", "Mkt Value", "P/L", "Note")
 	sb.WriteString(theme.Dimmed.Render(header))
 	sb.WriteString("\n")
 
 	for i, h := range holdings {
-		line := fmt.Sprintf("%-8s %-8s %-10s %-10s %-12s %-14s %s",
+		line := fmt.Sprintf("%-6s %-7s %-10s %-10s %-11s %-22s %s",
 			h.Ticker,
 			formatFloat(h.Shares),
 			"$"+formatFloat(h.AvgCost),
 			formatPriceOrDash(h),
 			formatMktValueOrDash(h),
 			formatPLOrDash(h),
-			h.Note,
+			truncate(h.Note, 12),
 		)
 		if i == m.holdingsCur && !m.Inputting() {
 			sb.WriteString(theme.Selected.Render("▸ " + line))
@@ -506,16 +561,6 @@ func (m Model) formTitle() string {
 	return ""
 }
 
-func (m Model) helpLine() string {
-	if m.Inputting() {
-		return "enter next/confirm • esc cancel"
-	}
-	if m.section == SectionHoldings {
-		return "↑↓ nav • a add • e edit • d del • p price • 2 watchlist"
-	}
-	return "↑↓ nav • a add • e edit • d del • 1 holdings"
-}
-
 // ---- field parsing / formatting ----
 
 func parseHoldingFields(f []string) (Holding, error) {
@@ -559,6 +604,20 @@ func parseWatchFields(f []string) (WatchItem, error) {
 		return WatchItem{}, fmt.Errorf("ticker is required")
 	}
 	return WatchItem{Ticker: ticker, Note: strings.TrimSpace(f[1])}, nil
+}
+
+// truncate clips s to at most max runes, appending an ellipsis when it had
+// to cut anything. Used to keep long Note / Location fields from pushing the
+// row past the pane's right edge.
+func truncate(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	if max <= 1 {
+		return "…"
+	}
+	return string(runes[:max-1]) + "…"
 }
 
 // formatFloat prints a number without trailing zeros, up to 2 decimals.

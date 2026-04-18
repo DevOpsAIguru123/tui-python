@@ -75,10 +75,16 @@ func TestVisualSmoke(t *testing.T) {
 	if !strings.Contains(m2.View(), "Pending") || !strings.Contains(m2.View(), "Completed") {
 		t.Error("expected both Pending and Completed section headers in mixed view")
 	}
-	if !strings.Contains(m2.View(), "3/5 done") {
-		t.Error("expected '3/5 done' badge in mixed view (2 pending + 3 done)")
+	// The "N/M done" label moved to the breadcrumb (Title()). The tab
+	// body now shows just the progress bar + percentage.
+	if !strings.Contains(m2.View(), "60%") {
+		t.Error("expected '60%' progress label in mixed view (3 done of 5)")
 	}
-	if !strings.Contains(m5.View(), "enter save") {
-		t.Error("expected edit-mode help text 'enter save' in edit view")
+	if !strings.Contains(m2.Title(), "2 pending · 3 done") {
+		t.Error("expected breadcrumb-ready title '2 pending · 3 done'")
+	}
+	v5 := m5.View()
+	if !strings.Contains(v5, "enter") || !strings.Contains(v5, "save") {
+		t.Error("expected edit-mode help keycap 'enter' + 'save' label in edit view")
 	}
 }

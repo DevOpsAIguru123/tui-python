@@ -19,7 +19,12 @@ type Model struct {
 	editing    bool
 	editTaskID string
 	input      textinput.Model
+	rowWidth   int
 }
+
+// SetRowWidth lets the app share its computed content width with this tab
+// so the progress bar and section dividers scale with the terminal size.
+func (m *Model) SetRowWidth(w int) { m.rowWidth = w }
 
 // New creates a TodoModel backed by the given store.
 func New(s *Store) Model {
@@ -35,6 +40,50 @@ func (m Model) Editing() bool   { return m.editing }
 func (m Model) Inputting() bool { return m.adding || m.editing }
 func (m Model) Tasks() []Task   { return m.tasks }
 func (m Model) Cursor() int     { return m.cursor }
+
+// Count returns the number of pending tasks (shown as the sidebar count pill).
+func (m Model) Count() int {
+	pending, _ := splitTasks(m.tasks)
+	return len(pending)
+}
+
+// Title is the subtitle shown in the breadcrumb header. It's a live status
+// hint ("2 pending", "all done", "no tasks") rather than a static label, so
+// the breadcrumb isn't redundant with the tab name.
+func (m Model) Title() string {
+	pending, completed := splitTasks(m.tasks)
+	switch {
+	case len(m.tasks) == 0:
+		return "no tasks"
+	case len(pending) == 0:
+		return "all done"
+	default:
+		return fmt.Sprintf("%d pending · %d done", len(pending), len(completed))
+	}
+}
+
+// Help returns the key hints rendered by the app's bottom help bar.
+func (m Model) Help() []theme.KeyHint {
+	if m.adding {
+		return []theme.KeyHint{
+			{Key: "enter", Label: "confirm"},
+			{Key: "esc", Label: "cancel"},
+		}
+	}
+	if m.editing {
+		return []theme.KeyHint{
+			{Key: "enter", Label: "save"},
+			{Key: "esc", Label: "cancel"},
+		}
+	}
+	return []theme.KeyHint{
+		{Key: "↑↓", Label: "navigate"},
+		{Key: "space", Label: "done"},
+		{Key: "e", Label: "edit"},
+		{Key: "d", Label: "delete"},
+		{Key: "a", Label: "add"},
+	}
+}
 
 // Init is a no-op.
 func (m Model) Init() tea.Cmd { return nil }
@@ -137,6 +186,37 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// renderTaskRow draws one task with a consistent "caret · checkbox · text"
+// gutter: both pending and completed rows use the same 4-column prefix so
+// the checkbox column aligns across sections. When the active input form is
+// open the cursor caret is suppressed so the input becomes the obvious focus.
+func (m Model) renderTaskRow(t Task, selected, done bool) string {
+	caret := "  "
+	if selected && !m.adding && !m.editing {
+		caret = theme.CrumbCaret.Render("▸ ")
+	}
+	box := "☐"
+	if done {
+		box = "☑"
+	}
+	text := t.Text
+	switch {
+	case done:
+		text = theme.CompletedTask.Render(text)
+	case selected && !m.adding && !m.editing:
+		text = theme.Selected.Render(text)
+	case m.adding || m.editing:
+		text = theme.Dimmed.Render(text)
+	default:
+		text = theme.Normal.Render(text)
+	}
+	boxStyle := theme.Normal
+	if done {
+		boxStyle = theme.Dimmed
+	}
+	return caret + boxStyle.Render(box) + "  " + text
+}
+
 // splitTasks divides tasks into pending and completed, preserving insertion order.
 func splitTasks(tasks []Task) (pending, completed []Task) {
 	for _, t := range tasks {
@@ -149,12 +229,18 @@ func splitTasks(tasks []Task) (pending, completed []Task) {
 	return
 }
 
-// renderProgressBar returns a 30-char progress bar with percentage.
-func renderProgressBar(done, total int) string {
+// renderProgressBar returns a progress bar sized to the caller's width hint
+// (clamped to a sane 20–80 cell range) with a trailing percentage.
+func renderProgressBar(done, total, width int) string {
 	if total == 0 {
 		return ""
 	}
-	const width = 30
+	if width < 20 {
+		width = 20
+	}
+	if width > 80 {
+		width = 80
+	}
 	filled := width * done / total
 	bar := theme.ProgressFilled.Render(strings.Repeat("▓", filled)) +
 		theme.ProgressEmpty.Render(strings.Repeat("░", width-filled))
@@ -170,16 +256,16 @@ func (m Model) View() string {
 	doneCount := len(completed)
 	total := len(m.tasks)
 
-	// Header with task count
-	header := theme.Dimmed.Render("Today's Tasks")
+	// The "Today's Tasks N/M done" header was intentionally removed —
+	// Title() already shows the same counts in the breadcrumb. The
+	// progress bar stays because it encodes the ratio visually, which
+	// the text breadcrumb doesn't.
 	if total > 0 {
-		header += "  " + theme.Badge.Render(fmt.Sprintf("%d/%d done", doneCount, total))
-	}
-	sb.WriteString(header + "\n")
-
-	// Progress bar
-	if total > 0 {
-		sb.WriteString(renderProgressBar(doneCount, total) + "\n")
+		barWidth := m.rowWidth - 10
+		if barWidth <= 0 {
+			barWidth = 30
+		}
+		sb.WriteString(renderProgressBar(doneCount, total, barWidth) + "\n")
 	}
 	sb.WriteString("\n")
 
@@ -193,12 +279,7 @@ func (m Model) View() string {
 			sb.WriteString(theme.Dimmed.Render("  No pending tasks") + "\n")
 		} else {
 			for i, t := range pending {
-				line := "☐  " + t.Text
-				if i == m.cursor && !m.adding && !m.editing {
-					sb.WriteString(theme.Selected.Render("▸ "+line) + "\n")
-				} else {
-					sb.WriteString(theme.Normal.Render("  "+line) + "\n")
-				}
+				sb.WriteString(m.renderTaskRow(t, i == m.cursor, false) + "\n")
 			}
 		}
 		sb.WriteString("\n")
@@ -209,13 +290,8 @@ func (m Model) View() string {
 			sb.WriteString(theme.Dimmed.Render("  No completed tasks yet") + "\n")
 		} else {
 			for i, t := range completed {
-				line := "☑  " + t.Text
 				cursorIdx := len(pending) + i
-				if cursorIdx == m.cursor && !m.adding && !m.editing {
-					sb.WriteString(theme.Selected.Render("▸ "+line) + "\n")
-				} else {
-					sb.WriteString(theme.Dimmed.Render("  "+line) + "\n")
-				}
+				sb.WriteString(m.renderTaskRow(t, cursorIdx == m.cursor, true) + "\n")
 			}
 		}
 	}
@@ -225,14 +301,7 @@ func (m Model) View() string {
 		sb.WriteString("\n" + m.input.View() + "\n")
 	}
 
-	// Help bar
 	sb.WriteString("\n")
-	if m.adding {
-		sb.WriteString(theme.HelpStyle.Render("enter confirm • esc cancel"))
-	} else if m.editing {
-		sb.WriteString(theme.HelpStyle.Render("enter save • esc cancel"))
-	} else {
-		sb.WriteString(theme.HelpStyle.Render("↑↓ nav • space done • e edit • d del • a add"))
-	}
+	sb.WriteString(theme.RenderKeyHints(m.Help()))
 	return sb.String()
 }

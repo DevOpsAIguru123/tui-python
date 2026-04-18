@@ -18,7 +18,12 @@ type Model struct {
 	loading   bool
 	err       error
 	fetchedAt time.Time
+	rowWidth  int
 }
+
+// SetRowWidth receives the main-pane content width from the app so the tab
+// can clip long event lines before they overflow the right edge.
+func (m *Model) SetRowWidth(w int) { m.rowWidth = w }
 
 // New creates a Calendar model. Fetch is kicked off by Init.
 // If a fresh on-disk cache exists for the default view, its events are
@@ -42,6 +47,39 @@ func (m Model) Events() []Event { return m.events }
 
 // CurrentView returns the currently selected time-range filter.
 func (m Model) CurrentView() View { return m.view }
+
+// Count returns the number of loaded events (sidebar pill badge).
+func (m Model) Count() int { return len(m.events) }
+
+// Title is the subtitle shown in the breadcrumb header. It reflects the
+// currently-selected view filter and the number of events in it, so the
+// header doubles as a status readout.
+func (m Model) Title() string {
+	label := strings.ToLower(m.view.Label())
+	if m.loading {
+		return label + " · loading…"
+	}
+	if len(m.events) == 0 {
+		return label + " · empty"
+	}
+	return fmt.Sprintf("%s · %d event%s", label, len(m.events), plural(len(m.events)))
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// Help returns the key hints rendered by the help bar.
+func (m Model) Help() []theme.KeyHint {
+	return []theme.KeyHint{
+		{Key: "↑↓", Label: "navigate"},
+		{Key: "1/2/3", Label: "view"},
+		{Key: "r", Label: "refresh"},
+	}
+}
 
 // Init kicks off the initial fetch (or returns nil on unsupported OS).
 func (m Model) Init() tea.Cmd {
@@ -143,7 +181,7 @@ func (m Model) View() string {
 	if m.loading {
 		sb.WriteString(theme.Dimmed.Render("  Loading events..."))
 		sb.WriteString("\n\n")
-		sb.WriteString(theme.HelpStyle.Render("1/2/3 switch view • r refresh"))
+		sb.WriteString(theme.RenderKeyHints(m.Help()))
 		return sb.String()
 	}
 
@@ -152,14 +190,17 @@ func (m Model) View() string {
 		sb.WriteString("\n")
 		sb.WriteString(theme.Dimmed.Render("  First run may need to grant Terminal access to Calendar in System Settings → Privacy."))
 		sb.WriteString("\n\n")
-		sb.WriteString(theme.HelpStyle.Render("1/2/3 switch view • r retry"))
+		sb.WriteString(theme.RenderKeyHints([]theme.KeyHint{
+			{Key: "1/2/3", Label: "view"},
+			{Key: "r", Label: "retry"},
+		}))
 		return sb.String()
 	}
 
 	if len(m.events) == 0 {
 		sb.WriteString(theme.Dimmed.Render("  No events in " + strings.ToLower(m.view.Label())))
 		sb.WriteString("\n\n")
-		sb.WriteString(theme.HelpStyle.Render("1/2/3 switch view • r refresh"))
+		sb.WriteString(theme.RenderKeyHints(m.Help()))
 		return sb.String()
 	}
 
@@ -174,12 +215,12 @@ func (m Model) View() string {
 				theme.Dimmed.Render("──────────────────────") + "\n")
 			lastDay = day
 		}
-		sb.WriteString(renderEventLine(e, i == m.cursor))
+		sb.WriteString(renderEventLine(e, i == m.cursor, m.rowWidth))
 		sb.WriteString("\n")
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(theme.HelpStyle.Render("↑↓ nav • 1/2/3 switch view • r refresh"))
+	sb.WriteString(theme.RenderKeyHints(m.Help()))
 	return sb.String()
 }
 
@@ -226,7 +267,11 @@ func humanAge(d time.Duration) string {
 	}
 }
 
-func renderEventLine(e Event, selected bool) string {
+// renderEventLine renders one agenda row. The pane's usable width (rowWidth)
+// is used to clip the overall line so the trailing calendar badge never gets
+// shoved off the right edge when title + location add up to a long string.
+// When rowWidth is 0 (not yet sized) the line flows at natural width.
+func renderEventLine(e Event, selected bool, rowWidth int) string {
 	var when string
 	if e.IsAllDay() {
 		when = "all-day"
@@ -235,15 +280,81 @@ func renderEventLine(e Event, selected bool) string {
 			e.Start.Format("3:04pm"),
 			e.End.Format("3:04pm"))
 	}
-	line := fmt.Sprintf("%-13s %s", when, e.Title)
-	if e.Location != "" {
-		line += theme.Dimmed.Render("  @ " + e.Location)
-	}
-	if e.Calendar != "" {
-		line += "  " + theme.Badge.Render(e.Calendar)
-	}
+	prefix := "  "
 	if selected {
-		return theme.Selected.Render("▸ " + line)
+		prefix = theme.Selected.Render("▸ ")
 	}
-	return theme.Normal.Render("  " + line)
+
+	titleStyle := theme.Normal
+	if selected {
+		titleStyle = theme.Selected
+	}
+
+	// Plan a width budget: prefix + timeCol + title + (loc) + (badge) ≤ rowWidth.
+	timeCol := fmt.Sprintf("%-13s ", when)
+	budget := rowWidth
+	if budget <= 0 {
+		budget = 1000 // effectively unbounded
+	}
+	used := 2 + len(timeCol) // prefix + time col
+
+	var locPart, badgePart string
+	if e.Calendar != "" {
+		b := "  " + e.Calendar
+		if used+runeLen(e.Title)+runeLen(b) <= budget {
+			badgePart = "  " + theme.Badge.Render(e.Calendar)
+		}
+	}
+	if e.Location != "" {
+		remaining := budget - used - runeLen(e.Title) - visibleLen(badgePart)
+		if remaining > 6 {
+			loc := "  @ " + e.Location
+			if runeLen(loc) > remaining {
+				loc = "  @ " + clip(e.Location, remaining-4)
+			}
+			locPart = theme.Dimmed.Render(loc)
+		}
+	}
+
+	title := e.Title
+	titleBudget := budget - used - visibleLen(locPart) - visibleLen(badgePart)
+	if titleBudget > 0 && runeLen(title) > titleBudget {
+		title = clip(title, titleBudget)
+	}
+
+	return prefix + theme.Dimmed.Render(timeCol) + titleStyle.Render(title) + locPart + badgePart
+}
+
+func runeLen(s string) int { return len([]rune(s)) }
+
+// visibleLen strips ANSI escape sequences and returns the rune count; used
+// when measuring already-styled fragments against a rendered width budget.
+func visibleLen(s string) int {
+	out := 0
+	inEsc := false
+	for _, r := range s {
+		if inEsc {
+			if r == 'm' {
+				inEsc = false
+			}
+			continue
+		}
+		if r == 0x1b {
+			inEsc = true
+			continue
+		}
+		out++
+	}
+	return out
+}
+
+func clip(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	if n <= 1 {
+		return "…"
+	}
+	return string(r[:n-1]) + "…"
 }
