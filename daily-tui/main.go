@@ -8,6 +8,7 @@ import (
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/app"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/calendar"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/portfolio"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/todo"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/wifi"
 
@@ -51,7 +52,9 @@ func main() {
 	todoStore := todo.NewStore(filepath.Join(configDir, "todos.json"))
 	todoModel := todo.New(todoStore)
 	calendarModel := calendar.New()
-	root := app.New(wifiModel, todoModel, calendarModel, version)
+	portfolioStore := portfolio.NewStore(filepath.Join(configDir, "portfolio.json"))
+	portfolioModel := portfolio.New(portfolioStore)
+	root := app.New(wifiModel, todoModel, calendarModel, portfolioModel, version)
 
 	p := tea.NewProgram(root, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
