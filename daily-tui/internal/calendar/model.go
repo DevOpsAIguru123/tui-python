@@ -60,6 +60,21 @@ func (m Model) Title() string {
 	return fmt.Sprintf("%s · %d event%s", label, len(m.events), plural(len(m.events)))
 }
 
+// clipLocation shortens an event location string to at most max runes,
+// appending an ellipsis if anything was cut. The calendar row doesn't need
+// the full address — a recognisable prefix is enough and leaves room for
+// the event title and calendar badge on the same line.
+func clipLocation(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	if max <= 1 {
+		return "…"
+	}
+	return string(runes[:max-1]) + "…"
+}
+
 func plural(n int) string {
 	if n == 1 {
 		return ""
@@ -273,7 +288,9 @@ func renderEventLine(e Event, selected bool) string {
 	}
 	line := fmt.Sprintf("%-13s %s", when, e.Title)
 	if e.Location != "" {
-		line += theme.Dimmed.Render("  @ " + e.Location)
+		// Clip long locations so a single event can't push the row past the
+		// pane's right edge (e.g. "@ Austin Central Library, Austin, TX").
+		line += theme.Dimmed.Render("  @ " + clipLocation(e.Location, 28))
 	}
 	if e.Calendar != "" {
 		line += "  " + theme.Badge.Render(e.Calendar)

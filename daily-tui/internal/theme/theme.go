@@ -43,20 +43,20 @@ func GlobalKeys() []KeyHint {
 
 // RenderKeyHints returns a horizontal help bar of "[ key ] label" pairs.
 // Each key glyph is drawn inside a rounded keycap; the label sits to its
-// right, vertically centred against the 3-line cap block. The bar ends
-// with the global keys (tab, q) separated by a faint divider so they're
-// visually distinct from the per-tab actions.
+// right, vertically centred against the 3-line cap block. Global keys
+// (tab, q) are appended after the tab-specific hints with slightly extra
+// breathing room so they read as universal.
 func RenderKeyHints(hints []KeyHint) string {
 	local := hints
 	global := GlobalKeys()
 	if len(local) == 0 && len(global) == 0 {
 		return ""
 	}
-	blocks := make([]string, 0, 2*(len(local)+len(global))+3)
-	blocks = append(blocks, "  ")
+	blocks := make([]string, 0, 2*(len(local)+len(global))+2)
+	blocks = append(blocks, " ")
 	appendHint := func(i int, h KeyHint) {
 		if i > 0 {
-			blocks = append(blocks, "   ")
+			blocks = append(blocks, "  ")
 		}
 		blocks = append(blocks, KeyCap.Render(h.Key))
 		blocks = append(blocks, " "+KeyDesc.Render(h.Label))
@@ -65,7 +65,7 @@ func RenderKeyHints(hints []KeyHint) string {
 		appendHint(i, h)
 	}
 	if len(local) > 0 && len(global) > 0 {
-		blocks = append(blocks, "   "+CrumbSep.Render("│")+"   ")
+		blocks = append(blocks, "    ")
 	}
 	for i, h := range global {
 		appendHint(i, h)

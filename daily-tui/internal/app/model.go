@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"os"
 	"os/user"
 	"strings"
@@ -38,7 +37,7 @@ var tabs = []tabSpec{
 	{Name: "Portfolio", Glyph: "♦"},
 }
 
-const sidebarWidth = 26
+const sidebarWidth = 20
 
 // tickMsg drives the clock in the header. We tick every 30s so the displayed
 // time stays within the minute without burning CPU on sub-second repaints.
@@ -272,38 +271,7 @@ func (m Model) renderSidebarTab(i int, t tabSpec) string {
 		name = theme.TabRowInactive.Render(name)
 	}
 
-	pill := theme.CountPill.Render(m.tabCountLabel(i))
-
-	// Inline left group (glyph + name), right group (pill) padded via spacer
-	// so count pills align across rows regardless of name length.
-	left := glyph + " " + name
-	return lipgloss.JoinHorizontal(lipgloss.Center, left, spacerTo(left, sidebarWidth-8), pill)
-}
-
-func (m Model) tabCountLabel(i int) string {
-	switch i {
-	case tabWifi:
-		return labelCount(m.wifi.Count())
-	case tabTodo:
-		return labelCount(m.todo.Count())
-	case tabCalendar:
-		return labelCount(m.calendar.Count())
-	case tabPortfolio:
-		return labelCount(m.portfolio.Count())
-	}
-	return "?"
-}
-
-// labelCount returns a 2-char right-aligned pill label so counts of different
-// magnitudes (e.g. "2" and "11") visually line up down the sidebar.
-func labelCount(n int) string {
-	if n <= 0 {
-		return " ·"
-	}
-	if n > 99 {
-		return "99"
-	}
-	return fmt.Sprintf("%2d", n)
+	return glyph + " " + name
 }
 
 func (m Model) renderSidebarHost() string {
@@ -409,17 +377,6 @@ func (m Model) activeView() string {
 }
 
 // ---- helpers ----
-
-// spacerTo returns a padding string such that left+padding equals target width
-// when measured in visible columns. It's used to align count pills inside the
-// sidebar without hard-coding lengths per tab name.
-func spacerTo(left string, target int) string {
-	w := visibleWidth(left)
-	if w >= target {
-		return " "
-	}
-	return strings.Repeat(" ", target-w)
-}
 
 func visibleWidth(s string) int {
 	out := 0

@@ -455,20 +455,22 @@ func (m Model) renderHoldings() string {
 		return sb.String()
 	}
 
-	header := fmt.Sprintf("  %-8s %-8s %-10s %-10s %-12s %-14s %s",
+	// P/L can run wide (e.g. "+$3263.01 (+141.58%)") so we give it a 22-col
+	// slot; Note is clipped to keep a single line from overflowing the pane.
+	header := fmt.Sprintf("  %-6s %-7s %-10s %-10s %-11s %-22s %s",
 		"Ticker", "Shares", "Avg Cost", "Last", "Mkt Value", "P/L", "Note")
 	sb.WriteString(theme.Dimmed.Render(header))
 	sb.WriteString("\n")
 
 	for i, h := range holdings {
-		line := fmt.Sprintf("%-8s %-8s %-10s %-10s %-12s %-14s %s",
+		line := fmt.Sprintf("%-6s %-7s %-10s %-10s %-11s %-22s %s",
 			h.Ticker,
 			formatFloat(h.Shares),
 			"$"+formatFloat(h.AvgCost),
 			formatPriceOrDash(h),
 			formatMktValueOrDash(h),
 			formatPLOrDash(h),
-			h.Note,
+			truncate(h.Note, 12),
 		)
 		if i == m.holdingsCur && !m.Inputting() {
 			sb.WriteString(theme.Selected.Render("▸ " + line))
@@ -602,6 +604,20 @@ func parseWatchFields(f []string) (WatchItem, error) {
 		return WatchItem{}, fmt.Errorf("ticker is required")
 	}
 	return WatchItem{Ticker: ticker, Note: strings.TrimSpace(f[1])}, nil
+}
+
+// truncate clips s to at most max runes, appending an ellipsis when it had
+// to cut anything. Used to keep long Note / Location fields from pushing the
+// row past the pane's right edge.
+func truncate(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	if max <= 1 {
+		return "…"
+	}
+	return string(runes[:max-1]) + "…"
 }
 
 // formatFloat prints a number without trailing zeros, up to 2 decimals.
