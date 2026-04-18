@@ -84,11 +84,18 @@ func TestEnterStartsRun(t *testing.T) {
 
 func TestRunDoneTransitionsToDone(t *testing.T) {
 	m := claudecode.New()
+	// The viewport needs a size before it will render its content — the app
+	// provides this on WindowSizeMsg. Do the equivalent here.
+	m.SetRowWidth(80)
+	m.SetContentHeight(30)
 	// Start a run so selected is populated.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(claudecode.Model)
 	updated, _ = m.Update(claudecode.RunDoneMsg{Prompt: "hello", Output: "hi there"})
 	m2 := updated.(claudecode.Model)
+	if m2.Output() != "hi there" {
+		t.Errorf("expected Output()='hi there', got %q", m2.Output())
+	}
 	if !strings.Contains(m2.View(), "hi there") {
 		t.Errorf("expected output 'hi there' rendered in View, got:\n%s", m2.View())
 	}

@@ -106,6 +106,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.todo.SetRowWidth(content)
 		m.calendar.SetRowWidth(content)
 		m.claudecode.SetRowWidth(content)
+		// The Claude tab's output viewport needs the usable vertical room
+		// inside the main pane so it can scroll long claude -p responses
+		// locally instead of pushing the rest of the UI off-screen.
+		m.claudecode.SetContentHeight(m.contentHeight())
 		return m, nil
 
 	case tickMsg:
@@ -364,6 +368,20 @@ func (m Model) mainWidth() int {
 		return m.width - chrome
 	}
 	return 90
+}
+
+// contentHeight reports the vertical space a tab has for its content,
+// once the header (top padding + breadcrumb + blank line) and the help
+// bar at the bottom are accounted for. Used by tabs whose content can
+// overflow the pane (currently just the Claude tab's output viewport).
+func (m Model) contentHeight() int {
+	// top padding (1) + breadcrumb (1) + blank (1) + help-bar keycap block (3)
+	// + bottom padding slack (1) = 7 lines of chrome around the content.
+	const chrome = 7
+	if m.height > chrome+5 {
+		return m.height - chrome
+	}
+	return 20
 }
 
 func (m Model) renderHeader(width int) string {
