@@ -1,9 +1,10 @@
-"""Root Textual app: sidebar with tabs, main pane with Todo/Claude content."""
+"""Root Textual app: sidebar with tabs, main pane with Todo/Claude/Tmux content."""
 
 from __future__ import annotations
 
 import getpass
 import os
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from textual.widgets import Static
 from . import __version__, theme
 from .claude import ClaudeView
 from .todo import TodoCountChanged, TodoStore, TodoView
+from .tmux_view import TmuxAttachRequested, TmuxCountChanged, TmuxView
 
 
 TUX_ART = r"""
@@ -26,6 +28,12 @@ TUX_ART = r"""
   █    █
   ▀▀  ▀▀
 """
+
+TABS = [
+    ("todo", "●", "Todo"),
+    ("claude", "✦", "Claude"),
+    ("tmux", "◆", "Tmux"),
+]
 
 
 def config_dir() -> Path:
@@ -66,6 +74,7 @@ class Sidebar(Vertical):
 
     active_tab: reactive[str] = reactive("todo")
     todo_count: reactive[int] = reactive(0)
+    tmux_count: reactive[int] = reactive(0)
 
     def compose(self) -> ComposeResult:
         yield Static(f"[bold {theme.MAUVE}]daily-tui-py[/]", classes="brand")
@@ -87,12 +96,17 @@ class Sidebar(Vertical):
     def watch_todo_count(self, _old: int, _new: int) -> None:
         self._refresh_tabs()
 
+    def watch_tmux_count(self, _old: int, _new: int) -> None:
+        self._refresh_tabs()
+
     def _refresh_tabs(self) -> None:
+        pills = {
+            "todo": str(self.todo_count) if self.todo_count else "",
+            "claude": "",
+            "tmux": str(self.tmux_count) if self.tmux_count else "",
+        }
         lines = []
-        for key, glyph, label, pill in [
-            ("todo", "●", "Todo", f"{self.todo_count}"),
-            ("claude", "✦", "Claude", ""),
-        ]:
+        for key, glyph, label in TABS:
             active = key == self.active_tab
             glyph_style = theme.MAUVE if active else theme.OVERLAY
             name_style = (
@@ -102,6 +116,7 @@ class Sidebar(Vertical):
                 f"[{glyph_style}]{glyph}[/]  "
                 f"[{name_style}]{label}[/]"
             )
+            pill = pills.get(key, "")
             if pill:
                 row += f"  [{theme.OVERLAY} on {theme.SURFACE}] {pill} [/]"
             lines.append(row)
@@ -120,7 +135,7 @@ class Sidebar(Vertical):
     def _keys_block(self) -> str:
         return (
             f"[{theme.SUBTEXT0}]tab[/] [{theme.OVERLAY}]switch[/]\n"
-            f"[{theme.SUBTEXT0}]1/2[/] [{theme.OVERLAY}]tabs[/]\n"
+            f"[{theme.SUBTEXT0}]1/2/3[/] [{theme.OVERLAY}]tabs[/]\n"
             f"[{theme.SUBTEXT0}]q[/]   [{theme.OVERLAY}]quit[/]"
         )
 
@@ -141,14 +156,15 @@ class MainPane(Vertical):
     }}
     """
 
-    def __init__(self, todo: TodoView, claude: ClaudeView) -> None:
+    def __init__(self, todo: TodoView, claude: ClaudeView, tmux: TmuxView) -> None:
         super().__init__()
         self.todo = todo
         self.claude = claude
+        self.tmux = tmux
 
     def compose(self) -> ComposeResult:
         yield Static("", id="breadcrumb")
-        yield Vertical(self.todo, self.claude, id="tab-container")
+        yield Vertical(self.todo, self.claude, self.tmux, id="tab-container")
 
 
 class DailyTuiApp(App):
@@ -168,11 +184,13 @@ class DailyTuiApp(App):
         Binding("tab", "next_tab", "switch", show=False, priority=True),
         Binding("1", "switch_tab('todo')", "todo", show=False),
         Binding("2", "switch_tab('claude')", "claude", show=False),
+        Binding("3", "switch_tab('tmux')", "tmux", show=False),
         Binding("q", "quit", "quit", show=False),
         Binding("ctrl+c", "quit", "quit", show=False),
     ]
 
     active_tab: reactive[str] = reactive("todo")
+    TAB_KEYS = [t[0] for t in TABS]
 
     def __init__(self) -> None:
         super().__init__()
@@ -182,8 +200,9 @@ class DailyTuiApp(App):
         self.config_path = cfg / "config.yaml"
         self.todo_view = TodoView(self.store)
         self.claude_view = ClaudeView(self.config_path)
+        self.tmux_view = TmuxView()
         self.sidebar = Sidebar()
-        self.main = MainPane(self.todo_view, self.claude_view)
+        self.main = MainPane(self.todo_view, self.claude_view, self.tmux_view)
 
     def compose(self) -> ComposeResult:
         yield Horizontal(self.sidebar, self.main, id="root")
@@ -197,7 +216,16 @@ class DailyTuiApp(App):
         self.sidebar.active_tab = self.active_tab
         self.todo_view.display = self.active_tab == "todo"
         self.claude_view.display = self.active_tab == "claude"
-        target = self.todo_view if self.active_tab == "todo" else self.claude_view
+        self.tmux_view.display = self.active_tab == "tmux"
+        target = {
+            "todo": self.todo_view,
+            "claude": self.claude_view,
+            "tmux": self.tmux_view,
+        }[self.active_tab]
+        if self.active_tab == "tmux":
+            # Refresh session list each time the tab becomes active so it
+            # reflects sessions started/stopped from another terminal.
+            self.tmux_view.refresh_list()
         try:
             target.focus()
         except Exception:
@@ -208,19 +236,22 @@ class DailyTuiApp(App):
         self._apply_active_tab()
 
     def action_next_tab(self) -> None:
-        self.active_tab = "claude" if self.active_tab == "todo" else "todo"
+        idx = self.TAB_KEYS.index(self.active_tab)
+        self.active_tab = self.TAB_KEYS[(idx + 1) % len(self.TAB_KEYS)]
 
     def action_switch_tab(self, name: str) -> None:
-        if name in ("todo", "claude"):
+        if name in self.TAB_KEYS:
             self.active_tab = name
 
     def _refresh_breadcrumb(self) -> None:
-        if self.active_tab == "todo":
-            label = "Todo"
-            sub = self.todo_view.title()
-        else:
-            label = "Claude"
-            sub = self.claude_view.title()
+        label_map = {"todo": "Todo", "claude": "Claude", "tmux": "Tmux"}
+        sub_map = {
+            "todo": self.todo_view.title(),
+            "claude": self.claude_view.title(),
+            "tmux": self.tmux_view.title(),
+        }
+        label = label_map[self.active_tab]
+        sub = sub_map[self.active_tab]
         clock = datetime.now().strftime("%I:%M %p").lstrip("0")
         left = (
             f"[{theme.MAUVE}]›[/] "
@@ -234,3 +265,24 @@ class DailyTuiApp(App):
     def on_todo_count_changed(self, event: TodoCountChanged) -> None:
         self.sidebar.todo_count = event.pending
         self._refresh_breadcrumb()
+
+    def on_tmux_count_changed(self, event: TmuxCountChanged) -> None:
+        self.sidebar.tmux_count = event.count
+        self._refresh_breadcrumb()
+
+    def on_tmux_attach_requested(self, event: TmuxAttachRequested) -> None:
+        """Suspend the TUI, hand the terminal to `tmux attach`, resume on detach."""
+        name = event.name
+        # Textual's suspend() context manager releases the terminal so the
+        # subprocess can own stdin/stdout/stderr. When we leave the block
+        # the alt-screen is restored and the TUI repaints.
+        with self.suspend():
+            try:
+                subprocess.run(["tmux", "attach-session", "-t", name], check=False)
+            except FileNotFoundError:
+                # `tmux` binary missing — surface it in the tab on resume.
+                self.tmux_view.status = "`tmux` binary not found on PATH"
+                self.tmux_view.status_is_error = True
+        # Refresh session list: attaching can auto-kill a "new" session on detach
+        # if it was the only window and `destroy-unattached` is set.
+        self.tmux_view.refresh_list()

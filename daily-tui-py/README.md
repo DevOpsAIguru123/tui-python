@@ -1,8 +1,8 @@
 # daily-tui-py
 
 A Python port of the `daily-tui` terminal dashboard — sidebar layout, Catppuccin
-Mocha palette, and two tabs: **Todo** and **Claude commands**. Built with
-[Textual](https://textual.textualize.io/).
+Mocha palette, and three tabs: **Todo**, **Claude commands**, and **Tmux
+sessions**. Built with [Textual](https://textual.textualize.io/).
 
 This is a focused subset of the Go original (`../daily-tui`): no WiFi, no
 Calendar, no Portfolio — just task tracking and a launcher for `claude -p`
@@ -127,14 +127,32 @@ Commands are discovered in this order (stable across runs):
 Each command tracks its own run state, so multiple commands can be in flight
 at once. A 5-minute timeout bounds any single invocation.
 
+## Tmux tab
+
+Lists live tmux sessions with a count pill in the sidebar.
+
+| Key      | Action                                              |
+|----------|-----------------------------------------------------|
+| `↑` `↓`  | Navigate session list                               |
+| `enter`  | Attach to the selected session (suspends the TUI)   |
+| `n`      | Create a new session — inline prompt, then attach   |
+| `k`      | Kill the selected session                           |
+| `r`      | Refresh the list                                    |
+| `esc`    | Cancel the new-session prompt                       |
+
+Attach flow: pressing `enter` suspends the Textual app and hands the terminal
+to `tmux attach-session -t <name>`. Inside tmux, the usual detach keystroke
+**`Ctrl-B` then `D`** returns you to the Tmux tab with a freshly refreshed
+session list.
+
 ## Global
 
-| Key        | Action       |
-|------------|--------------|
-| `tab`      | Switch tabs  |
-| `1` / `2`  | Todo / Claude|
-| `q`        | Quit         |
-| `ctrl+c`   | Quit         |
+| Key            | Action                |
+|----------------|-----------------------|
+| `tab`          | Cycle through tabs    |
+| `1` / `2` / `3`| Todo / Claude / Tmux  |
+| `q`            | Quit                  |
+| `ctrl+c`       | Quit                  |
 
 ---
 
@@ -150,7 +168,8 @@ daily-tui-py/
     ├── app.py            # Textual App: sidebar + tab switching
     ├── theme.py          # Catppuccin Mocha palette
     ├── todo.py           # Todo widget + JSON store
-    └── claude.py         # Claude commands widget + async runner
+    ├── claude.py         # Claude commands widget + async runner
+    └── tmux_view.py      # Tmux sessions widget + attach/new/kill
 ```
 
 ---
