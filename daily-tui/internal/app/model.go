@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/calendar"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/claudecode"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/portfolio"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/theme"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/todo"
@@ -22,6 +23,7 @@ const (
 	tabTodo      = 1
 	tabCalendar  = 2
 	tabPortfolio = 3
+	tabClaude    = 4
 )
 
 // Tab glyphs displayed next to each sidebar entry. They serve both as visual
@@ -36,6 +38,7 @@ var tabs = []tabSpec{
 	{Name: "Todo", Glyph: "●"},
 	{Name: "Calendar", Glyph: "◈"},
 	{Name: "Portfolio", Glyph: "♦"},
+	{Name: "Claude", Glyph: "✦"},
 }
 
 const sidebarWidth = 20
@@ -50,26 +53,28 @@ func tickCmd() tea.Cmd {
 
 // Model is the root Bubble Tea model.
 type Model struct {
-	activeTab int
-	wifi      wifi.Model
-	todo      todo.Model
-	calendar  calendar.Model
-	portfolio portfolio.Model
-	width     int
-	height    int
-	now       time.Time
-	version   string
+	activeTab  int
+	wifi       wifi.Model
+	todo       todo.Model
+	calendar   calendar.Model
+	portfolio  portfolio.Model
+	claudecode claudecode.Model
+	width      int
+	height     int
+	now        time.Time
+	version    string
 }
 
 // New creates the root AppModel.
-func New(wm wifi.Model, tm todo.Model, cm calendar.Model, pm portfolio.Model, version string) Model {
+func New(wm wifi.Model, tm todo.Model, cm calendar.Model, pm portfolio.Model, cc claudecode.Model, version string) Model {
 	return Model{
-		wifi:      wm,
-		todo:      tm,
-		calendar:  cm,
-		portfolio: pm,
-		version:   version,
-		now:       time.Now(),
+		wifi:       wm,
+		todo:       tm,
+		calendar:   cm,
+		portfolio:  pm,
+		claudecode: cc,
+		version:    version,
+		now:        time.Now(),
 	}
 }
 
@@ -83,6 +88,7 @@ func (m Model) Init() tea.Cmd {
 		m.todo.Init(),
 		m.calendar.Init(),
 		m.portfolio.Init(),
+		m.claudecode.Init(),
 		tickCmd(),
 	)
 }
@@ -99,6 +105,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.wifi.SetRowWidth(content)
 		m.todo.SetRowWidth(content)
 		m.calendar.SetRowWidth(content)
+		m.claudecode.SetRowWidth(content)
+		// The Claude tab's output viewport needs the usable vertical room
+		// inside the main pane so it can scroll long claude -p responses
+		// locally instead of pushing the rest of the UI off-screen.
+		m.claudecode.SetContentHeight(m.contentHeight())
 		return m, nil
 
 	case tickMsg:
@@ -114,7 +125,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		childInputting := (m.activeTab == tabWifi && m.wifi.Inputting()) ||
 			(m.activeTab == tabTodo && m.todo.Inputting()) ||
 			(m.activeTab == tabCalendar && m.calendar.Inputting()) ||
-			(m.activeTab == tabPortfolio && m.portfolio.Inputting())
+			(m.activeTab == tabPortfolio && m.portfolio.Inputting()) ||
+			(m.activeTab == tabClaude && m.claudecode.Inputting())
 		if !childInputting {
 			if msg.Type == tea.KeyRunes && string(msg.Runes) == "q" {
 				return m, tea.Quit
@@ -142,6 +154,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case "4":
 						m.activeTab = tabPortfolio
 						return m, nil
+					case "5":
+						m.activeTab = tabClaude
+						return m, nil
 					}
 				}
 			}
@@ -154,6 +169,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(calendar.EventsLoadedMsg); ok {
 		updated, cmd := m.calendar.Update(msg)
 		m.calendar = updated.(calendar.Model)
+		return m, cmd
+	}
+	if _, ok := msg.(claudecode.RunDoneMsg); ok {
+		updated, cmd := m.claudecode.Update(msg)
+		m.claudecode = updated.(claudecode.Model)
 		return m, cmd
 	}
 
@@ -174,6 +194,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tabPortfolio:
 		updated, cmd := m.portfolio.Update(msg)
 		m.portfolio = updated.(portfolio.Model)
+		return m, cmd
+	case tabClaude:
+		updated, cmd := m.claudecode.Update(msg)
+		m.claudecode = updated.(claudecode.Model)
 		return m, cmd
 	}
 	return m, nil
@@ -346,6 +370,20 @@ func (m Model) mainWidth() int {
 	return 90
 }
 
+// contentHeight reports the vertical space a tab has for its content,
+// once the header (top padding + breadcrumb + blank line) and the help
+// bar at the bottom are accounted for. Used by tabs whose content can
+// overflow the pane (currently just the Claude tab's output viewport).
+func (m Model) contentHeight() int {
+	// top padding (1) + breadcrumb (1) + blank (1) + help-bar keycap block (3)
+	// + bottom padding slack (1) = 7 lines of chrome around the content.
+	const chrome = 7
+	if m.height > chrome+5 {
+		return m.height - chrome
+	}
+	return 20
+}
+
 func (m Model) renderHeader(width int) string {
 	caret := theme.CrumbCaret.Render("›")
 	tab := theme.CrumbActive.Render(tabs[m.activeTab].Name)
@@ -372,6 +410,8 @@ func (m Model) activeTitle() string {
 		return m.calendar.Title()
 	case tabPortfolio:
 		return m.portfolio.Title()
+	case tabClaude:
+		return m.claudecode.Title()
 	}
 	return ""
 }
@@ -386,6 +426,8 @@ func (m Model) activeView() string {
 		return m.calendar.View()
 	case tabPortfolio:
 		return m.portfolio.View()
+	case tabClaude:
+		return m.claudecode.View()
 	}
 	return ""
 }

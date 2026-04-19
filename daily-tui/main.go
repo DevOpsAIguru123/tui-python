@@ -7,6 +7,7 @@ import (
 
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/app"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/calendar"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/claudecode"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/cli"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/portfolio"
@@ -67,7 +68,8 @@ func main() {
 	calendarModel := calendar.New()
 	portfolioStore := portfolio.NewStore(filepath.Join(configDir, "portfolio.json"))
 	portfolioModel := portfolio.New(portfolioStore)
-	root := app.New(wifiModel, todoModel, calendarModel, portfolioModel, version)
+	claudeModel := claudecode.New()
+	root := app.New(wifiModel, todoModel, calendarModel, portfolioModel, claudeModel, version)
 
 	p := tea.NewProgram(root, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
