@@ -1,8 +1,9 @@
 # daily-tui-py
 
 A Python port of the `daily-tui` terminal dashboard — sidebar layout, Catppuccin
-Mocha palette, and three tabs: **Todo**, **Claude commands**, and **Tmux
-sessions**. Built with [Textual](https://textual.textualize.io/).
+Mocha palette, and four tabs: **Todo**, **Claude commands**, **Tmux sessions**,
+and **Cron Jobs** (in-process scheduler). Built with
+[Textual](https://textual.textualize.io/).
 
 This is a focused subset of the Go original (`../daily-tui`): no WiFi, no
 Calendar, no Portfolio — just task tracking and a launcher for `claude -p`
@@ -145,14 +146,44 @@ to `tmux attach-session -t <name>`. Inside tmux, the usual detach keystroke
 **`Ctrl-B` then `D`** returns you to the Tmux tab with a freshly refreshed
 session list.
 
+## Cron Jobs tab
+
+An in-process scheduler — **not** the system crontab. Jobs are persisted to
+`~/.config/daily-tui-py/cronjobs.json` along with their per-job success/failed
+counters. While the TUI is running, enabled jobs fire on their cron schedule;
+you can also trigger, cancel, mark, and batch-run them manually.
+
+| Key      | Action                                            |
+|----------|---------------------------------------------------|
+| `↑` `↓`  | Navigate jobs                                     |
+| `a`      | Add — inline prompt, format: `name \| schedule \| command` |
+| `e`      | Edit selected job                                 |
+| `d`      | Delete selected job (cancels it first if running) |
+| `space`  | Enable / disable schedule for selected job        |
+| `x`      | Mark / unmark selected job                        |
+| `t`      | Trigger all marked jobs concurrently              |
+| `enter`  | Trigger the focused job                           |
+| `c`      | Cancel the focused job's running invocation       |
+| `r`      | Refresh / clear status line                       |
+| `esc`    | Cancel the add/edit prompt                        |
+
+Each row shows a spinner while running, a ✓ or ✗ for the last outcome, an
+enabled dot, mark box, name, schedule, truncated command, and success/failed
+counters. The sidebar count pill shows `running/total` when any job is
+running, or just `total` otherwise.
+
+**Schedule format**: standard five-field cron (`m h dom mon dow`), validated
+with [croniter](https://github.com/kiorky/croniter). Examples:
+`*/5 * * * *`, `0 9 * * 1-5`, `0 0 1 * *`.
+
 ## Global
 
-| Key            | Action                |
-|----------------|-----------------------|
-| `tab`          | Cycle through tabs    |
-| `1` / `2` / `3`| Todo / Claude / Tmux  |
-| `q`            | Quit                  |
-| `ctrl+c`       | Quit                  |
+| Key                | Action                        |
+|--------------------|-------------------------------|
+| `tab`              | Cycle through tabs            |
+| `1` / `2` / `3` / `4` | Todo / Claude / Tmux / Cron |
+| `q`                | Quit                          |
+| `ctrl+c`           | Quit                          |
 
 ---
 
@@ -169,7 +200,8 @@ daily-tui-py/
     ├── theme.py          # Catppuccin Mocha palette
     ├── todo.py           # Todo widget + JSON store
     ├── claude.py         # Claude commands widget + async runner
-    └── tmux_view.py      # Tmux sessions widget + attach/new/kill
+    ├── tmux_view.py      # Tmux sessions widget + attach/new/kill
+    └── cronjobs.py       # Cron Jobs widget + scheduler + counters
 ```
 
 ---

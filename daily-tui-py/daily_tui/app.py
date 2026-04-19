@@ -16,6 +16,7 @@ from textual.widgets import Static
 
 from . import __version__, theme
 from .claude import ClaudeView
+from .cronjobs import CronCountChanged, CronStore, CronView
 from .todo import TodoCountChanged, TodoStore, TodoView
 from .tmux_view import TmuxAttachRequested, TmuxCountChanged, TmuxView
 
@@ -33,6 +34,7 @@ TABS = [
     ("todo", "●", "Todo"),
     ("claude", "✦", "Claude"),
     ("tmux", "◆", "Tmux"),
+    ("cron", "◷", "Cron"),
 ]
 
 
@@ -75,6 +77,8 @@ class Sidebar(Vertical):
     active_tab: reactive[str] = reactive("todo")
     todo_count: reactive[int] = reactive(0)
     tmux_count: reactive[int] = reactive(0)
+    cron_count: reactive[int] = reactive(0)
+    cron_running: reactive[int] = reactive(0)
 
     def compose(self) -> ComposeResult:
         yield Static(f"[bold {theme.MAUVE}]daily-tui-py[/]", classes="brand")
@@ -99,11 +103,24 @@ class Sidebar(Vertical):
     def watch_tmux_count(self, _old: int, _new: int) -> None:
         self._refresh_tabs()
 
+    def watch_cron_count(self, _old: int, _new: int) -> None:
+        self._refresh_tabs()
+
+    def watch_cron_running(self, _old: int, _new: int) -> None:
+        self._refresh_tabs()
+
     def _refresh_tabs(self) -> None:
+        if self.cron_running:
+            cron_pill = f"{self.cron_running}/{self.cron_count}"
+        elif self.cron_count:
+            cron_pill = str(self.cron_count)
+        else:
+            cron_pill = ""
         pills = {
             "todo": str(self.todo_count) if self.todo_count else "",
             "claude": "",
             "tmux": str(self.tmux_count) if self.tmux_count else "",
+            "cron": cron_pill,
         }
         lines = []
         for key, glyph, label in TABS:
@@ -134,9 +151,9 @@ class Sidebar(Vertical):
 
     def _keys_block(self) -> str:
         return (
-            f"[{theme.SUBTEXT0}]tab[/] [{theme.OVERLAY}]switch[/]\n"
-            f"[{theme.SUBTEXT0}]1/2/3[/] [{theme.OVERLAY}]tabs[/]\n"
-            f"[{theme.SUBTEXT0}]q[/]   [{theme.OVERLAY}]quit[/]"
+            f"[{theme.SUBTEXT0}]tab[/]   [{theme.OVERLAY}]switch[/]\n"
+            f"[{theme.SUBTEXT0}]1-4[/]   [{theme.OVERLAY}]tabs[/]\n"
+            f"[{theme.SUBTEXT0}]q[/]     [{theme.OVERLAY}]quit[/]"
         )
 
 
@@ -156,15 +173,24 @@ class MainPane(Vertical):
     }}
     """
 
-    def __init__(self, todo: TodoView, claude: ClaudeView, tmux: TmuxView) -> None:
+    def __init__(
+        self,
+        todo: TodoView,
+        claude: ClaudeView,
+        tmux: TmuxView,
+        cron: CronView,
+    ) -> None:
         super().__init__()
         self.todo = todo
         self.claude = claude
         self.tmux = tmux
+        self.cron = cron
 
     def compose(self) -> ComposeResult:
         yield Static("", id="breadcrumb")
-        yield Vertical(self.todo, self.claude, self.tmux, id="tab-container")
+        yield Vertical(
+            self.todo, self.claude, self.tmux, self.cron, id="tab-container"
+        )
 
 
 class DailyTuiApp(App):
@@ -185,6 +211,7 @@ class DailyTuiApp(App):
         Binding("1", "switch_tab('todo')", "todo", show=False),
         Binding("2", "switch_tab('claude')", "claude", show=False),
         Binding("3", "switch_tab('tmux')", "tmux", show=False),
+        Binding("4", "switch_tab('cron')", "cron", show=False),
         Binding("q", "quit", "quit", show=False),
         Binding("ctrl+c", "quit", "quit", show=False),
     ]
@@ -198,11 +225,15 @@ class DailyTuiApp(App):
         cfg.mkdir(parents=True, exist_ok=True)
         self.store = TodoStore(cfg / "todos.json")
         self.config_path = cfg / "config.yaml"
+        self.cron_store = CronStore(cfg / "cronjobs.json")
         self.todo_view = TodoView(self.store)
         self.claude_view = ClaudeView(self.config_path)
         self.tmux_view = TmuxView()
+        self.cron_view = CronView(self.cron_store)
         self.sidebar = Sidebar()
-        self.main = MainPane(self.todo_view, self.claude_view, self.tmux_view)
+        self.main = MainPane(
+            self.todo_view, self.claude_view, self.tmux_view, self.cron_view
+        )
 
     def compose(self) -> ComposeResult:
         yield Horizontal(self.sidebar, self.main, id="root")
@@ -217,10 +248,12 @@ class DailyTuiApp(App):
         self.todo_view.display = self.active_tab == "todo"
         self.claude_view.display = self.active_tab == "claude"
         self.tmux_view.display = self.active_tab == "tmux"
+        self.cron_view.display = self.active_tab == "cron"
         target = {
             "todo": self.todo_view,
             "claude": self.claude_view,
             "tmux": self.tmux_view,
+            "cron": self.cron_view,
         }[self.active_tab]
         if self.active_tab == "tmux":
             # Refresh session list each time the tab becomes active so it
@@ -244,11 +277,17 @@ class DailyTuiApp(App):
             self.active_tab = name
 
     def _refresh_breadcrumb(self) -> None:
-        label_map = {"todo": "Todo", "claude": "Claude", "tmux": "Tmux"}
+        label_map = {
+            "todo": "Todo",
+            "claude": "Claude",
+            "tmux": "Tmux",
+            "cron": "Cron Jobs",
+        }
         sub_map = {
             "todo": self.todo_view.title(),
             "claude": self.claude_view.title(),
             "tmux": self.tmux_view.title(),
+            "cron": self.cron_view.title(),
         }
         label = label_map[self.active_tab]
         sub = sub_map[self.active_tab]
@@ -268,6 +307,11 @@ class DailyTuiApp(App):
 
     def on_tmux_count_changed(self, event: TmuxCountChanged) -> None:
         self.sidebar.tmux_count = event.count
+        self._refresh_breadcrumb()
+
+    def on_cron_count_changed(self, event: CronCountChanged) -> None:
+        self.sidebar.cron_count = event.total
+        self.sidebar.cron_running = event.running
         self._refresh_breadcrumb()
 
     def on_tmux_attach_requested(self, event: TmuxAttachRequested) -> None:
