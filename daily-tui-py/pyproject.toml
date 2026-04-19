@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daily-tui-py"
+version = "0.1.0"
+description = "Python TUI for daily productivity — Todo + Claude command launcher"
+requires-python = ">=3.9"
+dependencies = [
+    "textual>=0.47",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+daily-tui-py = "daily_tui.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["daily_tui*"]
