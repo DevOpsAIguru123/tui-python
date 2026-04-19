@@ -199,46 +199,74 @@ class TodoView(Vertical):
         if self.cursor >= len(ordered):
             self.cursor = max(0, len(ordered) - 1)
 
-        lines: list[str] = []
-        total = len(ordered)
-        pending = self._pending_count()
-        done = self._done_count()
+        pending_tasks = [t for t in self.store.tasks if not t.done]
+        completed_tasks = [t for t in self.store.tasks if t.done]
+        total = len(self.store.tasks)
+        pending = len(pending_tasks)
+        done = len(completed_tasks)
 
-        header = (
-            f"[bold {theme.TEXT}]Today's Tasks[/] "
-            f"[{theme.SUBTEXT0}]{pending} open[/] "
-            f"[{theme.OVERLAY}]·[/] "
-            f"[{theme.SUBTEXT0}]{done} done[/]"
-        )
+        lines: list[str] = []
+
+        # "Today's Tasks   3/6 done" — count in orange when any tasks exist.
+        if total == 0:
+            header = f"[{theme.TEXT}]Today's Tasks[/]"
+        else:
+            header = (
+                f"[{theme.TEXT}]Today's Tasks[/]   "
+                f"[{theme.PEACH}]{done}/{total} done[/]"
+            )
         lines.append(header)
-        lines.append(f"[{theme.OVERLAY}]── TASKS {'─' * 58}[/]")
+
+        # Progress bar — always visible when there are tasks.
+        if total > 0:
+            width = 60
+            filled = int(width * done / total)
+            pct = int(100 * done / total)
+            bar = (
+                f"[{theme.GREEN}]{'▓' * filled}[/]"
+                f"[{theme.SURFACE1}]{'░' * (width - filled)}[/]"
+                f"  [{theme.OVERLAY}]{pct}%[/]"
+            )
+            lines.append(bar)
+
+        lines.append("")
 
         if total == 0:
             lines.append(f"[{theme.OVERLAY}]  No tasks yet — press 'a' to add one[/]")
         else:
-            for i, task in enumerate(ordered):
-                selected = (i == self.cursor) and not self.is_inputting()
-                lines.append(self._render_row(task, i + 1, selected))
-
-        if total > 0 and pending > 0 and done > 0:
-            pct = int(100 * done / total) if total else 0
-            filled = max(0, min(40, int(40 * done / total))) if total else 0
-            bar = (
-                f"[{theme.GREEN}]{'▓' * filled}[/]"
-                f"[{theme.OVERLAY}]{'░' * (40 - filled)}[/]"
-                f"  [{theme.OVERLAY}]{pct}%[/]"
+            # Pending section
+            lines.append(
+                f"[bold {theme.TEXT}]── Pending ({pending}) [/]"
+                f"[{theme.OVERLAY}]{'─' * 40}[/]"
             )
+            if not pending_tasks:
+                lines.append(f"[{theme.OVERLAY}]  No pending tasks[/]")
+            else:
+                for i, task in enumerate(pending_tasks):
+                    selected = (i == self.cursor) and not self.is_inputting()
+                    lines.append(self._render_row(task, selected))
+
             lines.append("")
-            lines.append(bar)
+
+            # Completed section — dimmed header
+            lines.append(
+                f"[{theme.OVERLAY}]── Completed ({done}) {'─' * 40}[/]"
+            )
+            if not completed_tasks:
+                lines.append(f"[{theme.OVERLAY}]  No completed tasks yet[/]")
+            else:
+                for i, task in enumerate(completed_tasks):
+                    cursor_idx = pending + i
+                    selected = (cursor_idx == self.cursor) and not self.is_inputting()
+                    lines.append(self._render_row(task, selected))
 
         self.query_one("#todo-body", Static).update("\n".join(lines))
         self.query_one("#todo-help", Static).update(self._help_bar())
         self.post_message(TodoCountChanged(pending, done))
 
-    def _render_row(self, task: Task, index: int, selected: bool) -> str:
+    def _render_row(self, task: Task, selected: bool) -> str:
         caret = f"[{theme.MAUVE}]▸[/]" if selected else " "
         box = "☑" if task.done else "☐"
-        num = f"[{theme.OVERLAY}]#{index:02d}[/]"
         if task.done:
             text = f"[{theme.OVERLAY} strike]{task.text}[/]"
             box_style = f"[{theme.OVERLAY}]{box}[/]"
@@ -248,11 +276,7 @@ class TodoView(Vertical):
         else:
             text = f"[{theme.TEXT}]{task.text}[/]"
             box_style = f"[{theme.TEXT}]{box}[/]"
-        row = f"{caret}  {box_style}  {text}"
-        pad_target = 80
-        plain_len = 4 + 1 + 2 + len(task.text)
-        pad = max(1, pad_target - plain_len)
-        return f"{row}{' ' * pad}{num}"
+        return f"{caret}  {box_style}  {text}"
 
     def _help_bar(self) -> str:
         if self.mode == "add":
