@@ -8,11 +8,29 @@ import (
 )
 
 type Config struct {
-	WiFi WiFiConfig `yaml:"wifi"`
+	WiFi       WiFiConfig       `yaml:"wifi"`
+	ClaudeCode ClaudeCodeConfig `yaml:"claude_code"`
 }
 
 type WiFiConfig struct {
 	DailyResetNetworks []string `yaml:"daily_reset_networks"`
+}
+
+// ClaudeCodeConfig holds user-defined entries for the Claude tab's command
+// launcher. Each entry is fed straight into the existing Command struct so
+// the tab can execute it the same way as builtins and on-disk markdown
+// commands. See daily-tui/README.md for the YAML shape.
+type ClaudeCodeConfig struct {
+	Commands []ClaudeCodeCommand `yaml:"commands"`
+}
+
+// ClaudeCodeCommand mirrors claudecode.Command but without importing that
+// package (config is imported by many tabs and shouldn't pull in the tab's
+// internals). The claudecode package maps these into its own Command type.
+type ClaudeCodeCommand struct {
+	Name      string   `yaml:"name"`
+	Prompt    string   `yaml:"prompt"`
+	ExtraArgs []string `yaml:"extra_args,omitempty"`
 }
 
 // Load reads config from ~/.config/daily-tui/config.yaml.

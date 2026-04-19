@@ -96,6 +96,21 @@ wifi:
 
 Any network listed here will **always** prompt for a fresh password when you press Enter — even if it's already saved. The old entry is automatically removed before reconnecting. All other networks connect silently using the saved credential.
 
+You can also add custom launcher entries for the **Claude tab** — these are merged with the built-ins and any `~/.claude/commands/*.md` files:
+
+```yaml
+claude_code:
+  commands:
+    - name: deploy
+      prompt: "run the deploy pipeline and summarise output"
+    - name: security-scan
+      prompt: "run /security-review"
+      extra_args:
+        - "--dangerously-skip-permissions"
+```
+
+Each entry becomes a row in the Claude tab; pressing Enter runs `claude -p "<prompt>" [extra_args...]`. Entries with a blank `name` or `prompt` are skipped. To invoke a saved Claude Code slash command server-side, reference it from the `prompt` (e.g. `"run /security-review"`) rather than re-stating the template.
+
 ---
 
 ## Usage

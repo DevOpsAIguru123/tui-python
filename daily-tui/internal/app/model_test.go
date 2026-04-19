@@ -22,7 +22,7 @@ func newApp(t *testing.T) app.Model {
 	tm := todo.New(todo.NewStore(filepath.Join(t.TempDir(), "todos.json")))
 	cm := calendar.New()
 	pm := portfolio.New(portfolio.NewStore(filepath.Join(t.TempDir(), "portfolio.json")))
-	cc := claudecode.New()
+	cc := claudecode.New(config.ClaudeCodeConfig{})
 	return app.New(wm, tm, cm, pm, cc, "test")
 }
 
