@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/claudecode"
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestNewLoadsBuiltinHello(t *testing.T) {
-	m := claudecode.New()
+	m := claudecode.New(config.ClaudeCodeConfig{})
 	cmds := m.Commands()
 	if len(cmds) == 0 {
 		t.Fatal("expected at least the builtin 'hello' command")
@@ -24,8 +25,66 @@ func TestNewLoadsBuiltinHello(t *testing.T) {
 	}
 }
 
+func TestConfigCommandsAppearInList(t *testing.T) {
+	cfg := config.ClaudeCodeConfig{
+		Commands: []config.ClaudeCodeCommand{
+			{Name: "deploy", Prompt: "run the deploy pipeline"},
+			{Name: "security-scan", Prompt: "run /security-review",
+				ExtraArgs: []string{"--dangerously-skip-permissions"}},
+			// Entries with blank Name/Prompt must be dropped silently.
+			{Name: "", Prompt: "ignored"},
+			{Name: "ignored-no-prompt", Prompt: ""},
+		},
+	}
+	m := claudecode.New(cfg)
+
+	findByName := func(want string) *claudecode.Command {
+		for i := range m.Commands() {
+			c := m.Commands()[i]
+			if c.Name == want {
+				return &c
+			}
+		}
+		return nil
+	}
+
+	deploy := findByName("deploy")
+	if deploy == nil {
+		t.Fatal("expected config-driven 'deploy' command to be discovered")
+	}
+	if deploy.Source != "config" {
+		t.Errorf("expected Source=\"config\" for config entry, got %q", deploy.Source)
+	}
+	if deploy.Prompt != "run the deploy pipeline" {
+		t.Errorf("unexpected Prompt: %q", deploy.Prompt)
+	}
+
+	scan := findByName("security-scan")
+	if scan == nil {
+		t.Fatal("expected config-driven 'security-scan' command to be discovered")
+	}
+	if len(scan.ExtraArgs) != 1 || scan.ExtraArgs[0] != "--dangerously-skip-permissions" {
+		t.Errorf("expected ExtraArgs propagated from config, got %v", scan.ExtraArgs)
+	}
+
+	if findByName("") != nil || findByName("ignored-no-prompt") != nil {
+		t.Error("expected entries with blank Name or Prompt to be dropped")
+	}
+
+	// Ordering: builtins come before config entries.
+	for _, c := range m.Commands() {
+		if c.Source == "config" {
+			break // reached config section without hitting builtins first? we check below
+		}
+		if c.Source != "builtin" {
+			t.Errorf("expected builtins before any other source, saw %q (name=%s)", c.Source, c.Name)
+			break
+		}
+	}
+}
+
 func TestNetworkMonitorBuiltinHasSkipPermissionsFlag(t *testing.T) {
-	m := claudecode.New()
+	m := claudecode.New(config.ClaudeCodeConfig{})
 	var got *claudecode.Command
 	for i := range m.Commands() {
 		c := m.Commands()[i]
@@ -46,7 +105,7 @@ func TestNetworkMonitorBuiltinHasSkipPermissionsFlag(t *testing.T) {
 }
 
 func TestCursorNavigation(t *testing.T) {
-	m := claudecode.New()
+	m := claudecode.New(config.ClaudeCodeConfig{})
 	if m.Cursor() != 0 {
 		t.Errorf("expected cursor at 0, got %d", m.Cursor())
 	}
@@ -66,7 +125,7 @@ func TestCursorNavigation(t *testing.T) {
 }
 
 func TestEnterStartsRun(t *testing.T) {
-	m := claudecode.New()
+	m := claudecode.New(config.ClaudeCodeConfig{})
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m2 := updated.(claudecode.Model)
 	if cmd == nil {
@@ -85,7 +144,7 @@ func TestEnterStartsRun(t *testing.T) {
 }
 
 func TestRunDoneRendersOutput(t *testing.T) {
-	m := claudecode.New()
+	m := claudecode.New(config.ClaudeCodeConfig{})
 	// The viewport needs a size before it will render its content — the app
 	// provides this on WindowSizeMsg. Do the equivalent here.
 	m.SetRowWidth(80)
@@ -109,7 +168,7 @@ func TestArrowKeysMoveCursorAfterRun(t *testing.T) {
 	// viewport, leaving the user stuck on whichever command they'd just
 	// run. Now arrows always navigate the command list — the user can
 	// move from "hello" to "network-monitor" and Enter to fire it.
-	m := claudecode.New()
+	m := claudecode.New(config.ClaudeCodeConfig{})
 	m.SetRowWidth(80)
 	m.SetContentHeight(30)
 	if len(m.Commands()) < 2 {
@@ -143,7 +202,7 @@ func TestConcurrentRuns(t *testing.T) {
 	// Two commands fired back-to-back must each get their own runState
 	// and complete independently — the second Enter press shouldn't
 	// cancel or replace the first run.
-	m := claudecode.New()
+	m := claudecode.New(config.ClaudeCodeConfig{})
 	m.SetRowWidth(80)
 	m.SetContentHeight(30)
 	if len(m.Commands()) < 2 {
@@ -188,7 +247,7 @@ func TestConcurrentRuns(t *testing.T) {
 func TestDuplicateEnterIgnoredWhileRunning(t *testing.T) {
 	// Pressing Enter twice in a row on the same command shouldn't stack
 	// runs — the second press should be a no-op until the first completes.
-	m := claudecode.New()
+	m := claudecode.New(config.ClaudeCodeConfig{})
 	first := m.Commands()[0].Name
 	updated, cmd1 := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(claudecode.Model)
@@ -203,7 +262,7 @@ func TestDuplicateEnterIgnoredWhileRunning(t *testing.T) {
 }
 
 func TestEscClearsFocusedDoneRun(t *testing.T) {
-	m := claudecode.New()
+	m := claudecode.New(config.ClaudeCodeConfig{})
 	first := m.Commands()[0].Name
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(claudecode.Model)
@@ -222,7 +281,7 @@ func TestEscClearsFocusedDoneRun(t *testing.T) {
 func TestDiscoverSkipsMissingDir(t *testing.T) {
 	// Sanity: Discover shouldn't panic or error out when the user has no
 	// ~/.claude/commands directory. The builtin must always be present.
-	m := claudecode.New()
+	m := claudecode.New(config.ClaudeCodeConfig{})
 	got := m.Commands()
 	if len(got) < 1 {
 		t.Error("expected at least builtin hello, got none")

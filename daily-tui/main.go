@@ -68,7 +68,7 @@ func main() {
 	calendarModel := calendar.New()
 	portfolioStore := portfolio.NewStore(filepath.Join(configDir, "portfolio.json"))
 	portfolioModel := portfolio.New(portfolioStore)
-	claudeModel := claudecode.New()
+	claudeModel := claudecode.New(cfg.ClaudeCode)
 	root := app.New(wifiModel, todoModel, calendarModel, portfolioModel, claudeModel, version)
 
 	p := tea.NewProgram(root, tea.WithAltScreen())

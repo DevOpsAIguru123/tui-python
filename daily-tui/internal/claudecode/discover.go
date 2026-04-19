@@ -5,13 +5,22 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
 )
 
 // Discover returns the list of commands available in the Claude Code tab.
-// The ordering is stable: builtins first, then user commands from
-// ~/.claude/commands, then project commands from $PWD/.claude/commands.
-// Each group is sorted by name so the list is deterministic across runs.
-func Discover() []Command {
+//
+// Ordering (stable across runs):
+//  1. builtins (hardcoded below)
+//  2. config entries from ~/.config/daily-tui/config.yaml
+//  3. user commands from ~/.claude/commands/*.md
+//  4. project commands from $PWD/.claude/commands/*.md
+//
+// Config is accepted as a value (not a pointer) so callers can pass a zero
+// value or a nil-safe accessor without panicking. Dirs are each sorted by
+// name internally.
+func Discover(cfg config.ClaudeCodeConfig) []Command {
 	out := []Command{
 		{Name: "hello", Prompt: "hello", Source: "builtin"},
 		{
@@ -22,11 +31,38 @@ func Discover() []Command {
 		},
 	}
 
+	out = append(out, fromConfig(cfg)...)
+
 	if home, err := os.UserHomeDir(); err == nil {
 		out = append(out, scanCommandsDir(filepath.Join(home, ".claude", "commands"), "user")...)
 	}
 	if wd, err := os.Getwd(); err == nil {
 		out = append(out, scanCommandsDir(filepath.Join(wd, ".claude", "commands"), "project")...)
+	}
+	return out
+}
+
+// fromConfig turns each config entry into a claudecode.Command, tagging the
+// source as "config" so users can spot config-driven entries in the list.
+// Entries with an empty Name or Prompt are skipped — we'd rather drop a
+// malformed row than surface "<blank>" in the UI.
+func fromConfig(cfg config.ClaudeCodeConfig) []Command {
+	if len(cfg.Commands) == 0 {
+		return nil
+	}
+	out := make([]Command, 0, len(cfg.Commands))
+	for _, c := range cfg.Commands {
+		name := strings.TrimSpace(c.Name)
+		prompt := strings.TrimSpace(c.Prompt)
+		if name == "" || prompt == "" {
+			continue
+		}
+		out = append(out, Command{
+			Name:      name,
+			Prompt:    prompt,
+			ExtraArgs: append([]string(nil), c.ExtraArgs...),
+			Source:    "config",
+		})
 	}
 	return out
 }

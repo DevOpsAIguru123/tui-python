@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/config"
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/theme"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -48,10 +49,13 @@ type Model struct {
 	vp            viewport.Model
 }
 
-// New builds a fresh Model and loads the initial command list from disk.
-func New() Model {
+// New builds a fresh Model and loads the initial command list.
+//
+// cfg supplies any user-defined commands from ~/.config/daily-tui/config.yaml;
+// the builtins + on-disk markdown commands are always discovered regardless.
+func New(cfg config.ClaudeCodeConfig) Model {
 	return Model{
-		commands: Discover(),
+		commands: Discover(cfg),
 		runs:     map[string]*runState{},
 		vp:       viewport.New(0, 0),
 	}
