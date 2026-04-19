@@ -8,7 +8,6 @@ import (
 	"github.com/DevOpsAIguru123/productivity-tools/daily-tui/internal/theme"
 
 	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -447,13 +446,10 @@ func (m Model) scrollHint() string {
 	))
 }
 
-// wrapOutput is retained for tests that may rely on soft-wrapping behavior.
-func wrapOutput(text string, width int) string {
-	if width <= 0 {
-		return text
-	}
-	return lipgloss.NewStyle().Width(width).Render(text)
-}
+// wrapOutput used to soft-wrap output via lipgloss.Width, but the viewport
+// now owns width-based wrapping through vp.SetContent(). The function is
+// gone; leaving this note so future refactors don't add it back without
+// reason.
 
 func plural(n int) string {
 	if n == 1 {

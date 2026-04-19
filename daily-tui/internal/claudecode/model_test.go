@@ -196,7 +196,7 @@ func TestDuplicateEnterIgnoredWhileRunning(t *testing.T) {
 		t.Fatal("expected first Enter to produce a tea.Cmd")
 	}
 	updated, cmd2 := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = updated.(claudecode.Model)
+	_ = updated
 	if cmd2 != nil {
 		t.Errorf("expected second Enter on still-running %q to be ignored, got cmd %v", first, cmd2)
 	}
